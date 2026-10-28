@@ -199,6 +199,16 @@ select.field{min-height:48px}
 .tile .t{font-family:var(--display);font-weight:700;font-size:1.0625rem;line-height:1.2}
 .tile .s{color:var(--muted);font-size:.8125rem;line-height:1.35}
 .card+.pair{margin-top:18px}
+.rvbox{display:grid;gap:10px;margin:14px 0;padding:12px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--card)}
+.rvbox label{display:flex;flex-direction:column;gap:4px;font-size:.8125rem;color:var(--muted)}
+.rvbox select,.rvbox input[type=number]{font:inherit;min-height:44px;padding:6px 10px;border-radius:var(--r);border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.rvbox .rvck{flex-direction:row;align-items:center;gap:8px;min-height:44px;color:var(--ink)}
+.rvgo{display:flex;gap:10px;align-items:flex-end}.rvgo label{flex:1}
+.rvst{font-size:.8125rem;color:var(--muted)}
+.rvnav{display:grid;grid-template-columns:1fr 1fr 1.4fr 1fr;gap:8px;margin-bottom:12px}
+.rvact{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.rvnote{width:100%;margin-top:12px;padding:10px;font:inherit;border-radius:var(--r);border:1.5px solid var(--line);background:var(--bg);color:var(--ink);box-sizing:border-box}
+.rvfoot{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 </style>
 
 
@@ -576,12 +586,131 @@ function renderResults(){
   window.scrollTo(0, 0);
 }
 
+/* ---------- REVIEWER (hidden: tap the "Formats" line 5 times, or add #review) ---------- */
+const RV_KEY = 'whrev1';
+let RV = {f:'qe', hf:false, only:'all', pos:0, list:[], flagOut:''};
+function rvLoad(){ try{ return JSON.parse(localStorage.getItem(RV_KEY) || '{}') || {}; }catch(e){ return {}; } }
+let RVM = rvLoad();
+function rvSave(){ try{ localStorage.setItem(RV_KEY, JSON.stringify(RVM)); }catch(e){} }
+function rvKey(z, k){ return z.id + '.' + (k + 1); }
+function rvInScope(z){
+  if(z.sec === 'Review') return false;
+  if(RV.f === 'qe') return Number(z.id) >= 6 && Number(z.id) <= 14;
+  if(RV.f === 'all') return true;
+  return String(z.id) === RV.f;
+}
+function rvBuild(){
+  const L = [];
+  DATA.forEach((z, i) => {
+    if(!rvInScope(z)) return;
+    z.qs.forEach((q, k) => {
+      if(RV.hf && q.t === 'fill') return;
+      const m = RVM[rvKey(z, k)] || {};
+      if(RV.only === 'flag' && !m.f) return;
+      if(RV.only === 'todo' && m.c) return;
+      L.push({i:i, k:k});
+    });
+  });
+  RV.list = L;
+  if(RV.pos >= L.length) RV.pos = Math.max(0, L.length - 1);
+}
+function renderSecret(){
+  VIEW = 'secret';
+  app.innerHTML = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Owner tools</div></div>' +
+    '<button class="card" data-rv="open"><span class="num">🔍</span><span><div class="t">Reviewer</div><div class="s">Step through every question with the answer and guide line, flag or mark as checked</div></span></button>' +
+    '<button class="card" data-act="inbox"><span class="num">📥</span><span><div class="t">Suggestions inbox</div><div class="s">Only you can see this</div></span></button>';
+  window.scrollTo(0, 0);
+}
+function renderReviewer(){
+  VIEW = 'rev'; rvBuild();
+  const L = RV.list, n = L.length;
+  let all = 0, chk = 0, flg = 0;
+  DATA.forEach(z => { if(!rvInScope(z)) return; z.qs.forEach((q, k) => { all++; const m = RVM[rvKey(z, k)] || {}; if(m.c) chk++; if(m.f) flg++; }); });
+  let h = '<div class="top"><button class="btn" data-rv="exit">← Menu</button><div class="ttl">Reviewer</div><div class="cnt">' + (n ? RV.pos + 1 : 0) + ' / ' + n + '</div></div>';
+  h += '<div class="rvbox"><label>Show <select id="rvf"><option value="qe"' + (RV.f === 'qe' ? ' selected' : '') + '>Quiz 2 + Exam 2 (all)</option><option value="all"' + (RV.f === 'all' ? ' selected' : '') + '>Every set</option>' +
+    DATA.filter(z => z.sec !== 'Review').map(z => '<option value="' + z.id + '"' + (RV.f === String(z.id) ? ' selected' : '') + '>' + esc(z.lab || z.title) + '</option>').join('') + '</select></label>' +
+    '<label>Filter <select id="rvo"><option value="all"' + (RV.only === 'all' ? ' selected' : '') + '>All questions</option><option value="todo"' + (RV.only === 'todo' ? ' selected' : '') + '>Not yet checked</option><option value="flag"' + (RV.only === 'flag' ? ' selected' : '') + '>Flagged only</option></select></label>' +
+    '<label class="rvck"><input type="checkbox" id="rvhf"' + (RV.hf ? ' checked' : '') + '> Skip fill-in (date) questions</label>' +
+    '<div class="rvgo"><label>Go to # <input id="rvn" type="number" min="1" max="' + Math.max(1, n) + '" value="' + (n ? RV.pos + 1 : '') + '" inputmode="numeric"></label><button class="btn" data-rv="go">Go</button></div>' +
+    '<div class="rvst">' + chk + ' checked · ' + flg + ' flagged · ' + all + ' total in this scope</div></div>';
+  if(!n){
+    h += '<div class="menu-note">No questions match this filter.</div>';
+  } else {
+    const e = L[RV.pos], z = DATA[e.i], q = z.qs[e.k], m = RVM[rvKey(z, e.k)] || {};
+    h += '<div class="rvnav"><button class="btn" data-rv="m10">« 10</button><button class="btn" data-rv="prev">‹ Prev</button><button class="btn primary" data-rv="next">Next ›</button><button class="btn" data-rv="p10">10 »</button></div>';
+    h += '<div class="qcard"><span class="tag">' + esc(z.lab || z.title) + ' · Q' + (e.k + 1) + ' · ' + esc(q.s) + '</span><p class="q">' + esc(q.q) + '</p>';
+    if(q.img && MAPIMG[q.img]) h += '<figure class="mapfig"><img src="' + MAPIMG[q.img] + '" alt="Map"></figure>';
+    if(q.items) h += '<div class="items">' + q.items.map(t => '<div>' + esc(t) + '</div>').join('') + '</div>';
+    if(q.t === 'tf'){
+      h += '<div class="tf2">' + [true, false].map(v => '<div class="opt tfb' + (v === q.a ? ' ok' : '') + '">' + (v ? 'True' : 'False') + '</div>').join('') + '</div>';
+    } else if(q.t === 'mc'){
+      h += '<div class="opts">' + q.o.map((o, k) => '<div class="opt' + (k === q.a ? ' ok' : '') + '"><span class="l">' + 'ABCDE'[k] + '</span><span>' + esc(o) + '</span></div>').join('') + '</div>';
+    }
+    h += '<div class="fb ok"><b>Answer</b><div class="ans">' + esc(ansText(q)) + '</div></div>' +
+      '<div class="guide"><small>Guide line</small>' + esc(q.why) + '</div>' +
+      '<div class="rvact"><button class="btn' + (m.c ? ' primary' : '') + '" data-rv="chk">' + (m.c ? '✓ Checked' : 'Mark checked') + '</button>' +
+      '<button class="btn' + (m.f ? ' primary' : '') + '" data-rv="flag">' + (m.f ? '⚑ Flagged' : '⚑ Flag') + '</button>' +
+      '<button class="btn" data-rv="nextTodo">Next unchecked »</button></div>' +
+      '<textarea id="rvnote" class="rvnote" rows="2" placeholder="Note (optional)">' + esc(m.n || '') + '</textarea></div>';
+  }
+  h += '<div class="rvfoot"><button class="btn" data-rv="list">Show flagged list</button><button class="btn" data-rv="clear">Clear my marks</button></div>';
+  if(RV.flagOut) h += '<textarea id="rvout" class="rvnote" rows="8" readonly>' + esc(RV.flagOut) + '</textarea>';
+  app.innerHTML = h;
+}
+function rvCur(){ const e = RV.list[RV.pos]; return e ? {z:DATA[e.i], k:e.k} : null; }
+function rvSaveNote(){ const t = document.getElementById('rvnote'), c = rvCur(); if(t && c){ const key = rvKey(c.z, c.k); const m = RVM[key] = RVM[key] || {}; m.n = t.value; if(!m.n && !m.c && !m.f) delete RVM[key]; rvSave(); } }
+function rvMove(d){ rvSaveNote(); RV.pos = Math.min(Math.max(0, RV.pos + d), Math.max(0, RV.list.length - 1)); renderReviewer(); window.scrollTo(0, 0); }
+function rvFlagList(){
+  const out = [];
+  DATA.forEach(z => z.qs.forEach((q, k) => { const m = RVM[rvKey(z, k)]; if(m && m.f) out.push((z.lab || z.title) + ' Q' + (k + 1) + ': ' + q.q + (m.n ? '  [note: ' + m.n + ']' : '')); }));
+  return out.join('\n\n') || 'Nothing flagged yet.';
+}
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-rv]'); if(!b) return;
+  const a = b.dataset.rv;
+  if(a === 'open'){ renderReviewer(); window.scrollTo(0, 0); return; }
+  if(a === 'exit'){ rvSaveNote(); renderMenu(); window.scrollTo(0, 0); return; }
+  if(a === 'next') return rvMove(1);
+  if(a === 'prev') return rvMove(-1);
+  if(a === 'p10') return rvMove(10);
+  if(a === 'm10') return rvMove(-10);
+  if(a === 'go'){ const v = parseInt((document.getElementById('rvn') || {}).value, 10); if(v >= 1) { rvSaveNote(); RV.pos = Math.min(v, RV.list.length) - 1; renderReviewer(); window.scrollTo(0, 0); } return; }
+  if(a === 'chk' || a === 'flag'){
+    rvSaveNote(); const c = rvCur(); if(!c) return;
+    const key = rvKey(c.z, c.k); const m = RVM[key] = RVM[key] || {};
+    if(a === 'chk') m.c = m.c ? 0 : 1; else m.f = m.f ? 0 : 1;
+    if(!m.c && !m.f && !m.n) delete RVM[key];
+    rvSave(); renderReviewer(); return;
+  }
+  if(a === 'nextTodo'){
+    rvSaveNote(); const L = RV.list;
+    for(let s = 1; s <= L.length; s++){ const p = (RV.pos + s) % L.length; const m = RVM[rvKey(DATA[L[p].i], L[p].k)] || {}; if(!m.c){ RV.pos = p; break; } }
+    renderReviewer(); window.scrollTo(0, 0); return;
+  }
+  if(a === 'list'){ rvSaveNote(); RV.flagOut = rvFlagList(); renderReviewer(); try{ if(navigator.clipboard) navigator.clipboard.writeText(RV.flagOut).catch(function(){}); }catch(er){} return; }
+  if(a === 'clear'){ if(window.confirm && !window.confirm('Clear all your checked/flagged marks and notes on this device?')) return; RVM = {}; rvSave(); RV.flagOut = ''; renderReviewer(); return; }
+});
+app.addEventListener('change', e => {
+  const t = e.target; if(!t || VIEW !== 'rev') return;
+  if(t.id === 'rvf'){ rvSaveNote(); RV.f = t.value; RV.pos = 0; renderReviewer(); }
+  else if(t.id === 'rvo'){ rvSaveNote(); RV.only = t.value; RV.pos = 0; renderReviewer(); }
+  else if(t.id === 'rvhf'){ rvSaveNote(); RV.hf = t.checked; RV.pos = 0; renderReviewer(); }
+  else if(t.id === 'rvnote') rvSaveNote();
+});
+document.addEventListener('keydown', e => {
+  if(VIEW !== 'rev') return; const tg = (e.target && e.target.tagName) || '';
+  if(tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return;
+  if(e.key === 'ArrowRight') rvMove(1); else if(e.key === 'ArrowLeft') rvMove(-1);
+});
+if(location.hash === '#review') renderReviewer();
+window.addEventListener('hashchange', () => { if(location.hash === '#review') renderReviewer(); });
+
 /* ---------- EVENTS ---------- */
 let tapN = 0, tapT = 0;
 app.addEventListener('click', e => {
   if(e.target && e.target.id === 'secret'){
     const now = Date.now(); tapN = (now - tapT < 2000) ? tapN + 1 : 1; tapT = now;
-    if(tapN >= 5){ tapN = 0; renderInbox(); }
+    if(tapN >= 5){ tapN = 0; renderSecret(); }
     return;
   }
   const b = e.target.closest('[data-act]');
