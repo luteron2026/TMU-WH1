@@ -209,12 +209,10 @@ select.field{min-height:48px}
 .rvact{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .rvnote{width:100%;margin-top:12px;padding:10px;font:inherit;border-radius:var(--r);border:1.5px solid var(--line);background:var(--bg);color:var(--ink);box-sizing:border-box}
 .rvfoot{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
-.ver{max-width:640px;margin:0 auto;padding:0 16px 24px;color:var(--muted);font-size:0.75rem;text-align:center;font-variant-numeric:tabular-nums}
 </style>
 
 
 <div id="app" aria-live="polite"></div>
-<footer class="ver">Version 1.0 · Last updated October 29, 2026</footer>
 <script>
 /* ===== SUGGESTION BOX SETUP (for self-hosting) =====
    relayTopic: suggestions are sent to a free public relay (ntfy.sh). No account or API key.
@@ -468,6 +466,7 @@ function renderMenu(){
         (SG.count != null ? '<span class="chip">' + SG.count + ' open</span>' : '') + '</button>';
     }
     h += '<p class="fine" id="secret">Formats: Maps · True/False · Not correctly related · Which is false · Matching · Fill-in</p>';
+    h += '<p class="fine" style="margin-top:4px">Version 19 · Oct 28, 2026</p>';
   } else {
     const sc = SECS[SECI];
     const sets = DATA.filter(z => z.sec === sc.key);
