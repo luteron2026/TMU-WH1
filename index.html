@@ -6,6 +6,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script data-goatcounter="https://smbcfamilycamp2010.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </head><body>
 
 
@@ -619,7 +620,8 @@ function renderSecret(){
   VIEW = 'secret';
   app.innerHTML = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Owner tools</div></div>' +
     '<button class="card" data-rv="open"><span class="num">🔍</span><span><div class="t">Reviewer</div><div class="s">Step through every question with the answer and guide line, flag or mark as checked</div></span></button>' +
-    '<button class="card" data-act="inbox"><span class="num">📥</span><span><div class="t">Suggestions inbox</div><div class="s">Only you can see this</div></span></button>';
+    '<button class="card" data-act="inbox"><span class="num">📥</span><span><div class="t">Suggestions inbox</div><div class="s">Only you can see this</div></span></button>' +
+    '<button class="card" data-act="stats"><span class="num">📊</span><span><div class="t">Site stats</div><div class="s">Visitors, and which sections and sets people open</div></span></button>';
   window.scrollTo(0, 0);
 }
 function renderReviewer(){
@@ -729,12 +731,12 @@ app.addEventListener('click', e => {
   else if(a === 'setback'){ if(SET_FROM === 'q' && S.order.length) renderQ(); else renderMenu(); }
   else if(a === 'pref') setPref(b.dataset.pk, b.dataset.pv);
   else if(a === 'prefreset'){ PREF = Object.assign({}, DEF); savePrefs(); setShuf(false); applyPrefs(); renderSettings(); }
-  else if(a === 'start') startQuiz(+b.dataset.i);
-  else if(a === 'missed') startMissed(+b.dataset.s);
+  else if(a === 'start'){ gcSet(DATA[+b.dataset.i]); startQuiz(+b.dataset.i); }
+  else if(a === 'missed'){ gcMissed(+b.dataset.s); startMissed(+b.dataset.s); }
   else if(a === 'menu') renderMenu();
   else if(a === 'zoom') openZoom(b.dataset.m);
   else if(a === 'home'){ SECI = -1; renderMenu(); }
-  else if(a === 'sec'){ SECI = +b.dataset.s; renderMenu(); }
+  else if(a === 'sec'){ SECI = +b.dataset.s; gcSec(SECI); renderMenu(); }
   else if(a === 'tf') answer(b.dataset.v === 'true');
   else if(a === 'mc') answer(+b.dataset.k);
   else if(a === 'fill'){ const v = document.getElementById('fi').value; if(v.trim()) answer(v); }
@@ -744,7 +746,7 @@ app.addEventListener('click', e => {
   }
   else if(a === 'retry') startQuiz(S.qi, S.order.filter(i => !S.res[i]));
   else if(a === 'retake') startQuiz(S.qi);
-  else if(a === 'nextquiz') startQuiz(S.qi + 1);
+  else if(a === 'nextquiz'){ gcSet(DATA[S.qi + 1]); startQuiz(S.qi + 1); }
   else if(a === 'suggest') renderSuggest(null, 'menu');
   else if(a === 'report'){
     const z = DATA[S.qi], idx = S.order[S.pos], q = z.qs[idx];
@@ -754,6 +756,8 @@ app.addEventListener('click', e => {
   else if(a === 'sugsend') sendSuggestion();
   else if(a === 'sugcopy') copySuggestion();
   else if(a === 'inbox') renderInbox();
+  else if(a === 'stats') renderStats();
+  else if(a === 'gcskip'){ gcSetSkip(!gcSkipped()); renderStats(); }
   else if(a === 'sugdiag') relayDiag();
   else if(a === 'sugcopyall'){
     copyText((SG.items || []).filter(i => !i.done).map(itemAsText).join('\n\n')).then(ok => setStatus(ok ? 'Copied all open suggestions.' : 'Couldn’t copy automatically.', ok ? 'good' : 'bad'));
@@ -986,9 +990,86 @@ async function initSuggest(){
   }catch(e){}
 }
 
+/* ---------- SITE STATS (GoatCounter; hidden: Owner tools, or add #stats) ----------
+   Page views are counted by the GoatCounter script in <head>. Opening a section or
+   starting a practice set is also sent as an event, so the stats page can show which
+   parts get used. Counts are read from GoatCounter's public counter, which must be
+   turned on in GoatCounter: Settings → "Allow adding visitor counts on your website". */
+const GC_SITE = 'https://smbcfamilycamp2010.goatcounter.com';
+function gcSlug(t){ return String(t).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+function gcSkipped(){ try{ return localStorage.getItem('skipgc') === 't'; }catch(e){ return false; } }
+function gcSetSkip(v){ try{ if(v) localStorage.setItem('skipgc', 't'); else localStorage.removeItem('skipgc'); }catch(e){} }
+function gcEvent(path, title, tries){
+  if(gcSkipped()) return;
+  const g = window.goatcounter;
+  if(g && g.count){ try{ g.count({path: path, title: title, event: true}); }catch(e){} return; }
+  if((tries || 0) < 10) setTimeout(() => gcEvent(path, title, (tries || 0) + 1), 1000);
+}
+function gcSecPath(sc){ return 'section-' + gcSlug(sc.name); }
+function gcSetPath(z){ return 'set-' + z.id; }
+function gcMissPath(sc){ return 'missed-' + gcSlug(sc.name); }
+function gcSec(si){ const sc = SECS[si]; if(sc && sc.key !== 'Review') gcEvent(gcSecPath(sc), 'Opened section: ' + sc.name.replace(/&amp;/g, '&')); }
+function gcSet(z){ if(z && z.sec !== 'Review') gcEvent(gcSetPath(z), 'Started set: ' + z.lab); }
+function gcMissed(si){ const sc = SECS[si]; if(sc) gcEvent(gcMissPath(sc), 'Started missed questions: ' + sc.name.replace(/&amp;/g, '&')); }
+async function gcCount(path){
+  const res = await fetch(GC_SITE + '/counter/' + encodeURIComponent(path) + '.json');
+  if(res.status === 404) return 0;
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  return parseInt(String(j.count != null ? j.count : j.count_unique || '0').replace(/[^0-9]/g, ''), 10) || 0;
+}
+async function renderStats(){
+  VIEW = 'stats';
+  const head = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Site stats</div></div>';
+  app.innerHTML = head + '<div class="note">Loading…</div>'; window.scrollTo(0, 0);
+  const secs = SECS.filter(sc => sc.key !== 'Review');
+  const sets = DATA.filter(z => z.sec !== 'Review' && !z._src);
+  const page = location.pathname || '/';
+  const jobs = [gcCount('TOTAL'), gcCount(page)]
+    .concat(secs.map(sc => gcCount(gcSecPath(sc))))
+    .concat(secs.map(sc => gcCount(gcMissPath(sc))))
+    .concat(sets.map(z => gcCount(gcSetPath(z))));
+  const got = await Promise.allSettled(jobs);
+  if(VIEW !== 'stats') return;
+  const val = r => r.status === 'fulfilled' ? r.value : null;
+  const num = v => v == null ? '–' : v.toLocaleString();
+  const failed = got.filter(r => r.status === 'rejected');
+  const total = val(got[0]), visits = val(got[1]);
+  const secN = secs.map((_, i) => val(got[2 + i]));
+  const misN = secs.map((_, i) => val(got[2 + secs.length + i]));
+  const setN = sets.map((_, i) => val(got[2 + 2 * secs.length + i]));
+  let h = head;
+  if(failed.length === got.length){
+    h += '<p class="note" style="color:var(--bad)">Couldn’t load the counts (' + esc(String((failed[0].reason && failed[0].reason.message) || failed[0].reason)) + '). ' +
+      'In GoatCounter, open <b>Settings</b> and turn on <b>“Allow adding visitor counts on your website”</b>, then refresh. An ad blocker on this device can also block it.</p>';
+  }
+  h += '<div class="pair">' +
+    '<div class="tile"><span class="t" style="font-size:28px">' + num(visits) + '</span><span class="s">Visitors to the site</span></div>' +
+    '<div class="tile"><span class="t" style="font-size:28px">' + num(total) + '</span><span class="s">All tracked activity (visits + section and set opens)</span></div></div>';
+  const bars = rows => {
+    const max = Math.max(1, ...rows.map(r => r.n || 0));
+    return rows.map(r => '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>' + r.label + '</span><b>' + num(r.n) + '</b></div>' +
+      '<div class="bar" style="margin:4px 0 0"><i style="width:' + ((r.n || 0) / max * 100) + '%"></i></div></div>').join('');
+  };
+  h += '<h3 style="margin-top:20px">Sections opened</h3>' + bars(secs.map((sc, i) => ({label: sc.name, n: secN[i]})));
+  secs.forEach((sc, si) => {
+    const rows = sets.map((z, i) => ({z, n: setN[i]})).filter(r => r.z.sec === sc.key).map(r => ({label: esc(r.z.title) + (r.z.grp ? ' <span style="color:var(--muted)">· ' + esc(r.z.grp) + '</span>' : ''), n: r.n}));
+    rows.push({label: '<i>Missed questions review</i>', n: misN[si]});
+    h += '<h3 style="margin-top:20px">' + sc.name + ': sets started</h3>' + bars(rows);
+  });
+  h += '<p class="note">Counts are unique visitors, all time, from GoatCounter. Visitors with ad blockers aren’t counted, so real numbers are a bit higher. Section and set counts start from the day this was added.</p>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button>' +
+    '<a class="btn" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center" href="' + GC_SITE + '" target="_blank" rel="noopener">Open full GoatCounter dashboard</a>' +
+    '<button class="btn" data-act="gcskip">' + (gcSkipped() ? 'Count my visits on this device again' : 'Don’t count my visits on this device') + '</button></div>' +
+    '<p class="note">' + (gcSkipped() ? 'Your visits on this device are <b>not</b> being counted.' : 'Your visits on this device are being counted.') + '</p>';
+  app.innerHTML = h;
+}
+
 renderMenu();
 initSuggest();
 if(location.hash === '#inbox') renderInbox();
+if(location.hash === '#stats') renderStats();
+window.addEventListener('hashchange', () => { if(location.hash === '#stats') renderStats(); });
 window.addEventListener('hashchange', () => { if(location.hash === '#inbox') renderInbox(); });
 </script>
 
