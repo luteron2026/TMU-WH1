@@ -23,6 +23,7 @@
   --accent:#1f3d94; --accent-ink:#ffffff; --accent-soft:#dfe6f5;
   --r:8px; --r2:6px; --scale:1; --mark:#ffe14d; --hl:#fff3a6; --hl-line:#e3c92e;
   --good:#146b3a; --good-bg:#dff1e6; --bad:#a82a23; --bad-bg:#fae6e3;
+  --viz1:#2f55c8; --viz2:#c2570c;
   --display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
   --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -33,6 +34,7 @@
     --accent:#93b2ff; --accent-ink:#0c1630; --accent-soft:#21304f;
     --mark:#8f7a00; --hl:#3d3610; --hl-line:#7a6a1c;
     --good:#74d3a0; --good-bg:#14301f; --bad:#ff948b; --bad-bg:#3a1e1c;
+    --viz1:#5f82e0; --viz2:#c8751c;
     color-scheme:dark;
   }
 }
@@ -41,6 +43,7 @@
   --accent:#93b2ff; --accent-ink:#0c1630; --accent-soft:#21304f;
   --mark:#8f7a00; --hl:#3d3610; --hl-line:#7a6a1c;
   --good:#74d3a0; --good-bg:#14301f; --bad:#ff948b; --bad-bg:#3a1e1c;
+  --viz1:#5f82e0; --viz2:#c8751c;
   color-scheme:dark;
 }
 html{font-size:calc(100% * var(--scale,1));scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}
@@ -758,6 +761,7 @@ app.addEventListener('click', e => {
   else if(a === 'inbox') renderInbox();
   else if(a === 'stats') renderStats();
   else if(a === 'gcskip'){ gcSetSkip(!gcSkipped()); renderStats(); }
+  else if(a === 'gcview'){ gcSetView(b.dataset.v); renderStats(); }
   else if(a === 'gcrange'){ gcSetRange(b.dataset.r); renderStats(); }
   else if(a === 'gckeysave'){ const el = document.getElementById('gc-key'); const k = el ? el.value.trim() : ''; if(k){ gcSetKey(k); renderStats(); } else if(el) el.focus(); }
   else if(a === 'gckeydel'){ gcSetKey(''); renderStats(); }
@@ -1043,32 +1047,174 @@ async function gcCount(path, start){
 }
 /* All paths with their visitor counts in the range, from the API: {path(lowercase): count}. */
 async function gcApiHits(r){
-  const out = {}, seen = [];
-  const base = GC_SITE + '/api/v0/stats/hits?limit=100&start=' + gcIso(gcStartMs(r)) + '&end=' + gcIso(Math.ceil(Date.now() / 3600000) * 3600000);
+  const out = {};
+  (await gcApiRaw(gcStartMs(r), Math.ceil(Date.now() / 3600000) * 3600000)).forEach(x => { out[String(x.path).toLowerCase()] = {n: x.count || 0, ev: !!x.event}; });
+  return out;
+}
+/* ---- Hourly graph (needs the API key) ----
+   GoatCounter returns, per path, a list of days with 24 hourly visitor counts. Those days
+   and hours are in the timezone set in GoatCounter, so the timeline is built in that zone
+   (read from /api/v0/me; falls back to this device's zone). */
+let GC_VIEWMODE = (() => { try{ return localStorage.getItem('gc_view') === 'graph' ? 'graph' : 'numbers'; }catch(e){ return 'numbers'; } })();
+function gcSetView(v){ GC_VIEWMODE = v; try{ localStorage.setItem('gc_view', v); }catch(e){} }
+let GC_TZ = '', GC_CHART = null;
+function gcTzOk(z){ try{ new Intl.DateTimeFormat('en', {timeZone: z}); return true; }catch(e){ return false; } }
+async function gcTz(){
+  if(GC_TZ) return GC_TZ;
+  let z = '';
+  try{
+    const res = await fetch(GC_SITE + '/api/v0/me', {headers: {'Authorization': 'Bearer ' + gcKey()}, cache: 'no-store'});
+    if(res.ok){
+      const j = await res.json(), t = j && j.user && j.user.settings && j.user.settings.timezone;
+      const m = String(typeof t === 'string' ? t : JSON.stringify(t || '')).match(/(?:[A-Za-z_]+\/[A-Za-z_+\-\/]+|UTC|Etc\/[A-Za-z0-9+\-]+)/);
+      if(m && gcTzOk(m[0])) z = m[0];
+    }
+  }catch(e){}
+  if(!z){ try{ z = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }catch(e){ z = 'UTC'; } }
+  return (GC_TZ = z);
+}
+/* "YYYY-MM-DD HH" for a UTC instant, in zone z. */
+function gcZoneKey(ms, z){
+  const p = {}; new Intl.DateTimeFormat('en-CA', {timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'}).formatToParts(new Date(ms)).forEach(x => { p[x.type] = x.value; });
+  return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour;
+}
+async function gcApiRaw(startMs, endMs){
+  const out = [], seen = [];
+  const base = GC_SITE + '/api/v0/stats/hits?limit=100&start=' + gcIso(startMs) + '&end=' + gcIso(endMs);
   for(let page = 0; page < 10; page++){
     const res = await fetch(base + (seen.length ? '&exclude_paths=' + seen.join(',') : ''), {headers: {'Authorization': 'Bearer ' + gcKey()}, cache: 'no-store'});
     if(res.status === 401 || res.status === 403){ const e = new Error('GoatCounter didn’t accept the API key'); e.badKey = true; throw e; }
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const j = await res.json();
-    (j.hits || []).forEach(x => { out[String(x.path).toLowerCase()] = {n: x.count || 0, ev: !!x.event}; seen.push(x.path_id); });
+    (j.hits || []).forEach(x => { out.push(x); seen.push(x.path_id); });
     if(!j.more || !(j.hits || []).length) break;
   }
   return out;
+}
+/* Points [{t: label ms, v: visitors, e: opens}] for the range. Hourly for up to 30 days;
+   "all time" is by day over the last 180 days (hourly would be thousands of points). */
+async function gcSeries(r){
+  const H = 3600000, now = Date.now(), endMs = Math.ceil(now / H) * H;
+  const daily = r === 'all', hours = r === 'hour' ? 24 : GC_HOURS[r];
+  const startMs = daily ? Math.floor((now - 180 * 24 * H) / (24 * H)) * 24 * H : Math.floor((now - hours * H) / H) * H;
+  const [hits, z] = await Promise.all([gcApiRaw(startMs, endMs), gcTz()]);
+  const vis = {}, ev = {};
+  hits.forEach(x => (x.stats || []).forEach(s => {
+    const tgt = x.event ? ev : vis;
+    if(daily){ tgt[s.day] = (tgt[s.day] || 0) + (s.daily || 0); return; }
+    (s.hourly || []).forEach((n, h) => { if(n){ const k = s.day + ' ' + String(h).padStart(2, '0'); tgt[k] = (tgt[k] || 0) + n; } });
+  }));
+  const pts = [], step = daily ? 24 * H : H;
+  for(let t = daily ? startMs + 12 * H : startMs; t < endMs; t += step){
+    const k = daily ? gcZoneKey(t, z).slice(0, 10) : gcZoneKey(t, z);
+    if(pts.length && pts[pts.length - 1].k === k) continue;
+    pts.push({t, k, v: vis[k] || 0, e: ev[k] || 0});
+  }
+  if(daily){ const first = pts.findIndex(p => p.v || p.e); if(first > 0) pts.splice(0, Math.max(0, first - 1)); }
+  return {pts, z, daily};
+}
+function gcFmt(ms, z, o){ try{ return new Date(ms).toLocaleString([], Object.assign({timeZone: z}, o)); }catch(e){ return new Date(ms).toLocaleString(); } }
+function gcChartSvg(s, W){
+  const pts = s.pts, H = 240, L = 40, R = 12, T = 12, B = 30, iw = W - L - R, ih = H - T - B, n = pts.length;
+  const maxV = Math.max(1, ...pts.map(p => Math.max(p.v, p.e)));
+  const mag = Math.pow(10, Math.floor(Math.log10(maxV))), nice = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= maxV / 4) || mag;
+  const top = Math.ceil(maxV / nice) * nice, unit = Math.max(1, Math.round(nice));
+  const x = i => L + (n <= 1 ? iw / 2 : i * iw / (n - 1)), y = v => T + ih - v / top * ih;
+  let g = '';
+  for(let v = 0; v <= top + 1e-9; v += unit){
+    g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--line)" stroke-width="1"' + (v ? ' stroke-dasharray="2 3"' : '') + '/>' +
+      '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)">' + v.toLocaleString() + '</text>';
+  }
+  /* About 5 time labels, on round hours/days. */
+  const want = Math.max(2, Math.min(6, Math.floor(iw / 70)));
+  const span = s.daily ? [1, 2, 7, 14, 30, 60] : [1, 2, 3, 6, 12, 24, 48, 72, 168];
+  const every = span.find(k => n / k <= want) || span[span.length - 1];
+  const lab = s.daily ? {month: 'short', day: 'numeric'} : (n > 200 ? {month: 'short', day: 'numeric'} : n > 30 ? {weekday: 'short'} : {hour: 'numeric'});
+  pts.forEach((p, i) => {
+    const hr = +p.k.slice(11, 13);
+    const ok = s.daily ? (n - 1 - i) % every === 0 : every >= 24 ? hr === 0 && Math.round((p.t - pts[0].t) / 864e5) % (every / 24) === 0 : hr % every === 0;
+    if(ok) g += '<text x="' + x(i) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="11" fill="var(--muted)">' + esc(gcFmt(p.t, s.z, lab)) + '</text>';
+  });
+  const line = (key, col) => '<path d="' + pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p[key]).toFixed(1)).join('') + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  GC_CHART = {s, W, H, L, R, T, ih, x, y, n};
+  return '<div id="gc-chart" style="position:relative;touch-action:pan-y">' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" role="img" aria-label="Line graph of visitors and section and set opens over time" style="display:block;overflow:visible">' + g +
+    line('e', 'var(--viz2)') + line('v', 'var(--viz1)') +
+    '<g id="gc-hover" style="display:none"><line id="gc-hl" y1="' + T + '" y2="' + (T + ih) + '" stroke="var(--muted)" stroke-width="1"/>' +
+    '<circle id="gc-d2" r="4.5" fill="var(--viz2)" stroke="var(--card)" stroke-width="2"/><circle id="gc-d1" r="4.5" fill="var(--viz1)" stroke="var(--card)" stroke-width="2"/></g></svg>' +
+    '<div id="gc-tip" role="status" style="display:none;position:absolute;top:0;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:.8125rem;line-height:1.45;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap"></div></div>';
+}
+function gcChartHover(ev){
+  const c = GC_CHART, el = document.getElementById('gc-chart');
+  if(!c || !el) return;
+  const box = el.getBoundingClientRect(), px = (ev.clientX - box.left) * c.W / box.width;
+  const i = Math.max(0, Math.min(c.n - 1, Math.round((px - c.L) / ((c.W - c.L - c.R) / Math.max(1, c.n - 1)))));
+  const p = c.s.pts[i], X = c.x(i);
+  document.getElementById('gc-hover').style.display = '';
+  ['gc-hl'].forEach(id => { const l = document.getElementById(id); l.setAttribute('x1', X); l.setAttribute('x2', X); });
+  const d1 = document.getElementById('gc-d1'), d2 = document.getElementById('gc-d2');
+  d1.setAttribute('cx', X); d1.setAttribute('cy', c.y(p.v)); d2.setAttribute('cx', X); d2.setAttribute('cy', c.y(p.e));
+  const tip = document.getElementById('gc-tip');
+  const when = c.s.daily ? gcFmt(p.t, c.s.z, {weekday: 'short', month: 'short', day: 'numeric'}) : gcFmt(p.t, c.s.z, {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric'});
+  tip.innerHTML = '<div style="color:var(--muted)">' + esc(when) + '</div>' +
+    '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz1);vertical-align:middle;margin-right:6px"></span>Visitors <b>' + p.v.toLocaleString() + '</b></div>' +
+    '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz2);vertical-align:middle;margin-right:6px"></span>Section &amp; set opens <b>' + p.e.toLocaleString() + '</b></div>';
+  tip.style.display = '';
+  const sx = X * box.width / c.W, tw = tip.offsetWidth;
+  tip.style.left = Math.max(0, Math.min(box.width - tw, sx + (sx > box.width / 2 ? -tw - 12 : 12))) + 'px';
+}
+function gcChartLeave(){ const a = document.getElementById('gc-hover'), b = document.getElementById('gc-tip'); if(a) a.style.display = 'none'; if(b) b.style.display = 'none'; }
+async function renderStatsGraph(head, footer, r, rl){
+  app.innerHTML = head + '<div class="note">Loading…</div>'; window.scrollTo(0, 0);
+  let s, err = '', badKey = false;
+  try{ s = await gcSeries(r); }catch(e){ err = e.message || String(e); badKey = !!e.badKey; }
+  if(VIEW !== 'stats' || GC_RANGE !== r || GC_VIEWMODE !== 'graph') return;
+  let h = head;
+  if(err){
+    app.innerHTML = h + '<p class="note" style="color:var(--bad)">Couldn’t load the graph (' + esc(err) + '). ' +
+      (badKey ? 'Check that the key is right and has “Read statistics” ticked, or remove it and paste a new one.' : 'An ad blocker on this device can block it.') + '</p>' + footer;
+    return;
+  }
+  const tv = s.pts.reduce((a, p) => a + p.v, 0), te = s.pts.reduce((a, p) => a + p.e, 0);
+  const title = r === 'all' ? 'Visitors per day' : 'Visitors per hour · ' + (r === 'hour' ? 'last 24 hours' : rl.toLowerCase());
+  const sw = c => '<span style="display:inline-block;width:14px;height:3px;border-radius:2px;background:' + c + ';vertical-align:middle;margin-right:6px"></span>';
+  h += '<h3 style="margin:0 0 6px">' + title + '</h3>' +
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.875rem;margin-bottom:8px">' +
+    '<span>' + sw('var(--viz1)') + 'Visitors <b>' + tv.toLocaleString() + '</b></span>' +
+    '<span>' + sw('var(--viz2)') + 'Section &amp; set opens <b>' + te.toLocaleString() + '</b></span></div>';
+  h += '<div id="gc-chart-slot"></div>';
+  const rows = s.pts.filter(p => p.v || p.e).reverse();
+  h += '<details style="margin-top:10px"><summary>Show as table</summary>' +
+    (rows.length ? '<table style="width:100%;border-collapse:collapse;font-size:.875rem;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 0">' + (s.daily ? 'Day' : 'Hour') + '</th><th style="text-align:right">Visitors</th><th style="text-align:right">Opens</th></tr></thead><tbody>' +
+      rows.map(p => '<tr style="border-top:1px solid var(--line)"><td style="padding:4px 0">' + esc(gcFmt(p.t, s.z, s.daily ? {weekday: 'short', month: 'short', day: 'numeric'} : {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric'})) + '</td><td style="text-align:right">' + p.v.toLocaleString() + '</td><td style="text-align:right">' + p.e.toLocaleString() + '</td></tr>').join('') + '</tbody></table>'
+      : '<p class="note">No visits in this period.</p>') + '</details>';
+  h += '<p class="note">' + (r === 'hour' ? 'The graph shows the last 24 hours (one hour is a single point). ' : '') +
+    (s.daily ? 'All time is shown by day for the last 180 days; hourly would be too many points to read. ' : '') +
+    'Times are in your GoatCounter timezone (' + esc(s.z) + '). ' + (s.daily ? 'Each day counts unique visitors that day, so someone who comes back on two days is counted on both.' : 'Each hour counts unique visitors in that hour, so someone who stays across two hours is counted in both.') + ' Tap or hover the graph to see each ' + (s.daily ? 'day' : 'hour') + '.</p>' + footer;
+  app.innerHTML = h;
+  const slot = document.getElementById('gc-chart-slot');
+  slot.innerHTML = gcChartSvg(s, Math.max(260, Math.round(slot.clientWidth || 340)));
+  const el = document.getElementById('gc-chart');
+  el.addEventListener('pointermove', gcChartHover);
+  el.addEventListener('pointerdown', gcChartHover);
+  el.addEventListener('pointerleave', gcChartLeave);
 }
 async function renderStats(){
   VIEW = 'stats';
   const r = GC_RANGE, key = gcKey(), rl = GC_RANGES.find(x => x[0] === r)[2];
   const head = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Site stats</div></div>' +
-    '<div class="seg" role="group" aria-label="Time range" style="margin-bottom:14px">' + GC_RANGES.map(x => '<button data-act="gcrange" data-r="' + x[0] + '" aria-pressed="' + (x[0] === r) + '">' + x[1] + '</button>').join('') + '</div>';
+    '<div class="seg" role="group" aria-label="Time range" style="margin-bottom:14px">' + GC_RANGES.map(x => '<button data-act="gcrange" data-r="' + x[0] + '" aria-pressed="' + (x[0] === r) + '">' + x[1] + '</button>').join('') + '</div>' +
+    '<div class="seg" role="group" aria-label="Show as" style="margin-bottom:14px">' + [['numbers', 'Numbers'], ['graph', 'Line graph']].map(x => '<button data-act="gcview" data-v="' + x[0] + '" aria-pressed="' + (x[0] === GC_VIEWMODE) + '">' + x[1] + '</button>').join('') + '</div>';
   const keyLine = key ? '<p class="note">API key: saved on this device. <button class="link" data-act="gckeydel">Remove key</button></p>' : '';
   const footer = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button>' +
     '<a class="btn" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center" href="' + GC_SITE + '" target="_blank" rel="noopener">Open full GoatCounter dashboard</a>' +
     '<button class="btn" data-act="gcskip">' + (gcSkipped() ? 'Count my visits on this device again' : 'Don’t count my visits on this device') + '</button></div>' +
     '<p class="note">' + (gcSkipped() ? 'Your visits on this device are <b>not</b> being counted.' : 'Your visits on this device are being counted.') + '</p>' + keyLine;
-  if(GC_HOURS[r] <= 24 && !key){
+  const graph = GC_VIEWMODE === 'graph';
+  if((graph || GC_HOURS[r] <= 24) && !key){
     app.innerHTML = head +
-      '<h3>' + rl + ' needs a GoatCounter API key</h3>' +
-      '<p class="note">GoatCounter’s public counter only counts whole days. For the last hour or 24 hours, this page has to ask GoatCounter’s API, which needs a key. You only do this once per device. The key is saved in this browser only, and is never part of the website.</p>' +
+      '<h3>' + (graph ? 'The line graph' : rl) + ' needs a GoatCounter API key</h3>' +
+      '<p class="note">GoatCounter’s public counter only counts whole days' + (graph ? ' and has no hour-by-hour data' : '') + '. For ' + (graph ? 'the graph' : 'the last hour or 24 hours') + ', this page has to ask GoatCounter’s API, which needs a key. You only do this once per device. The key is saved in this browser only, and is never part of the website.</p>' +
       '<ol class="note" style="padding-left:20px"><li>Open <a href="' + GC_SITE + '/user/api" target="_blank" rel="noopener">GoatCounter → Settings → API</a>.</li>' +
       '<li>Create a new key and tick <b>only “Read statistics”</b>.</li><li>Copy the key and paste it below.</li></ol>' +
       '<label class="lbl" for="gc-key">API key</label><input id="gc-key" class="field" autocomplete="off" spellcheck="false" placeholder="Paste your GoatCounter API key">' +
@@ -1077,6 +1223,7 @@ async function renderStats(){
     window.scrollTo(0, 0);
     return;
   }
+  if(graph) return renderStatsGraph(head, footer, r, rl);
   app.innerHTML = head + '<div class="note">Loading…</div>'; window.scrollTo(0, 0);
   const secs = SECS.filter(sc => sc.key !== 'Review');
   const sets = DATA.filter(z => z.sec !== 'Review' && !z._src);
@@ -1119,7 +1266,7 @@ async function renderStats(){
     const evN = secN.concat(misN, setN).reduce((a, n) => a + (n || 0), 0);
     visits = total == null ? pageN : Math.max(pageN || 0, total - evN);
   }
-  if(VIEW !== 'stats' || GC_RANGE !== r) return;
+  if(VIEW !== 'stats' || GC_RANGE !== r || GC_VIEWMODE !== 'numbers') return;
   const num = v => v == null ? '–' : v.toLocaleString();
   let h = head;
   if(errMsg){
