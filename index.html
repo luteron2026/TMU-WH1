@@ -758,6 +758,9 @@ app.addEventListener('click', e => {
   else if(a === 'inbox') renderInbox();
   else if(a === 'stats') renderStats();
   else if(a === 'gcskip'){ gcSetSkip(!gcSkipped()); renderStats(); }
+  else if(a === 'gcrange'){ gcSetRange(b.dataset.r); renderStats(); }
+  else if(a === 'gckeysave'){ const el = document.getElementById('gc-key'); const k = el ? el.value.trim() : ''; if(k){ gcSetKey(k); renderStats(); } else if(el) el.focus(); }
+  else if(a === 'gckeydel'){ gcSetKey(''); renderStats(); }
   else if(a === 'sugdiag') relayDiag();
   else if(a === 'sugcopyall'){
     copyText((SG.items || []).filter(i => !i.done).map(itemAsText).join('\n\n')).then(ok => setStatus(ok ? 'Copied all open suggestions.' : 'Couldn’t copy automatically.', ok ? 'good' : 'bad'));
@@ -994,11 +997,7 @@ async function initSuggest(){
    Page views are counted by the GoatCounter script in <head>. Opening a section or
    starting a practice set is also sent as an event, so the stats page can show which
    parts get used. Counts are read from GoatCounter's public counter, which must be
-   turned on in GoatCounter: Settings → "Allow adding visitor counts on your website".
-   GoatCounter caches each counter for 4 hours (on its server and in the browser), keyed
-   on path + start/end. A plain request can return a count from hours ago (often 0 from
-   the first time the page was opened). So each load asks with a fresh "start" date from
-   before the site existed: same all-time count, new cache key, current numbers. */
+   turned on in GoatCounter: Settings → "Allow adding visitor counts on your website". */
 const GC_SITE = 'https://smbcfamilycamp2010.goatcounter.com';
 function gcSlug(t){ return String(t).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 function gcSkipped(){ try{ return localStorage.getItem('skipgc') === 't'; }catch(e){ return false; } }
@@ -1015,69 +1014,138 @@ function gcMissPath(sc){ return 'missed-' + gcSlug(sc.name); }
 function gcSec(si){ const sc = SECS[si]; if(sc && sc.key !== 'Review') gcEvent(gcSecPath(sc), 'Opened section: ' + sc.name.replace(/&amp;/g, '&')); }
 function gcSet(z){ if(z && z.sec !== 'Review') gcEvent(gcSetPath(z), 'Started set: ' + z.lab); }
 function gcMissed(si){ const sc = SECS[si]; if(sc) gcEvent(gcMissPath(sc), 'Started missed questions: ' + sc.name.replace(/&amp;/g, '&')); }
-let GC_START = '';
-function gcFreshStart(){
-  const min = Math.floor(Date.now() / 60000);
-  GC_START = new Date(Date.UTC(2000, 0, 1) + (min % 9000) * 86400000).toISOString().slice(0, 10);
-}
-async function gcCount(path){
-  if(!GC_START) gcFreshStart();
-  const res = await fetch(GC_SITE + '/counter/' + encodeURIComponent(path) + '.json?start=' + GC_START, {cache: 'no-store'});
+/* Time ranges. GoatCounter's public counter only understands whole days (start=YYYY-MM-DD,
+   midnight UTC), so "last hour" and "last 24 hours" need GoatCounter's API, which needs an
+   API key. The key is pasted on the stats page and kept only in this browser's storage. It is
+   never part of the page source. With a key, every range except "all time" uses the API
+   (hourly precision). Without one, 7 and 30 days use the public counter in whole UTC days. */
+const GC_RANGES = [['hour', '1 hour', 'Last hour'], ['day', '24 hours', 'Last 24 hours'], ['week', '7 days', 'Last 7 days'], ['month', '30 days', 'Last 30 days'], ['all', 'All time', 'All time']];
+const GC_HOURS = {hour: 1, day: 24, week: 168, month: 720};
+let GC_RANGE = (() => { try{ const r = localStorage.getItem('gc_range'); return GC_RANGES.some(x => x[0] === r) ? r : 'all'; }catch(e){ return 'all'; } })();
+function gcSetRange(r){ GC_RANGE = r; try{ localStorage.setItem('gc_range', r); }catch(e){} }
+function gcKey(){ try{ return localStorage.getItem('gc_api_key') || ''; }catch(e){ return ''; } }
+function gcSetKey(k){ try{ if(k) localStorage.setItem('gc_api_key', k); else localStorage.removeItem('gc_api_key'); }catch(e){} }
+/* Start of the range, rounded down to the hour (GoatCounter stores counts per hour). */
+function gcStartMs(r){ const H = 3600000; return Math.floor((Date.now() - GC_HOURS[r] * H) / H) * H; }
+function gcIso(ms){ return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z'); }
+/* GoatCounter caches each public counter for 4 hours, keyed on path + start + end, so a plain
+   request can return hours-old numbers. Each load sends a different far-future "end" date:
+   same count, new cache key, current numbers. */
+let GC_END = '';
+function gcFreshEnd(){ GC_END = new Date(Date.UTC(2100, 0, 1) + (Math.floor(Date.now() / 60000) % 9000) * 86400000).toISOString().slice(0, 10); }
+async function gcCount(path, start){
+  if(!GC_END) gcFreshEnd();
+  const res = await fetch(GC_SITE + '/counter/' + encodeURIComponent(path) + '.json?end=' + GC_END + (start ? '&start=' + start : ''), {cache: 'no-store'});
   if(res.status === 404) return 0;
   if(!res.ok) throw new Error('HTTP ' + res.status);
   const j = await res.json();
   return parseInt(String(j.count != null ? j.count : j.count_unique || '0').replace(/[^0-9]/g, ''), 10) || 0;
 }
+/* All paths with their visitor counts in the range, from the API: {path(lowercase): count}. */
+async function gcApiHits(r){
+  const out = {}, seen = [];
+  const base = GC_SITE + '/api/v0/stats/hits?limit=100&start=' + gcIso(gcStartMs(r)) + '&end=' + gcIso(Math.ceil(Date.now() / 3600000) * 3600000);
+  for(let page = 0; page < 10; page++){
+    const res = await fetch(base + (seen.length ? '&exclude_paths=' + seen.join(',') : ''), {headers: {'Authorization': 'Bearer ' + gcKey()}, cache: 'no-store'});
+    if(res.status === 401 || res.status === 403){ const e = new Error('GoatCounter didn’t accept the API key'); e.badKey = true; throw e; }
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    (j.hits || []).forEach(x => { out[String(x.path).toLowerCase()] = {n: x.count || 0, ev: !!x.event}; seen.push(x.path_id); });
+    if(!j.more || !(j.hits || []).length) break;
+  }
+  return out;
+}
 async function renderStats(){
   VIEW = 'stats';
-  const head = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Site stats</div></div>';
+  const r = GC_RANGE, key = gcKey(), rl = GC_RANGES.find(x => x[0] === r)[2];
+  const head = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Site stats</div></div>' +
+    '<div class="seg" role="group" aria-label="Time range" style="margin-bottom:14px">' + GC_RANGES.map(x => '<button data-act="gcrange" data-r="' + x[0] + '" aria-pressed="' + (x[0] === r) + '">' + x[1] + '</button>').join('') + '</div>';
+  const keyLine = key ? '<p class="note">API key: saved on this device. <button class="link" data-act="gckeydel">Remove key</button></p>' : '';
+  const footer = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button>' +
+    '<a class="btn" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center" href="' + GC_SITE + '" target="_blank" rel="noopener">Open full GoatCounter dashboard</a>' +
+    '<button class="btn" data-act="gcskip">' + (gcSkipped() ? 'Count my visits on this device again' : 'Don’t count my visits on this device') + '</button></div>' +
+    '<p class="note">' + (gcSkipped() ? 'Your visits on this device are <b>not</b> being counted.' : 'Your visits on this device are being counted.') + '</p>' + keyLine;
+  if(GC_HOURS[r] <= 24 && !key){
+    app.innerHTML = head +
+      '<h3>' + rl + ' needs a GoatCounter API key</h3>' +
+      '<p class="note">GoatCounter’s public counter only counts whole days. For the last hour or 24 hours, this page has to ask GoatCounter’s API, which needs a key. You only do this once per device. The key is saved in this browser only, and is never part of the website.</p>' +
+      '<ol class="note" style="padding-left:20px"><li>Open <a href="' + GC_SITE + '/user/api" target="_blank" rel="noopener">GoatCounter → Settings → API</a>.</li>' +
+      '<li>Create a new key and tick <b>only “Read statistics”</b>.</li><li>Copy the key and paste it below.</li></ol>' +
+      '<label class="lbl" for="gc-key">API key</label><input id="gc-key" class="field" autocomplete="off" spellcheck="false" placeholder="Paste your GoatCounter API key">' +
+      '<div style="margin-top:10px"><button class="btn" data-act="gckeysave">Save key</button></div>' +
+      '<p class="note">Only save it on your own devices: anyone using this browser could read your stats with it. You can delete the key in GoatCounter at any time.</p>' + footer;
+    window.scrollTo(0, 0);
+    return;
+  }
   app.innerHTML = head + '<div class="note">Loading…</div>'; window.scrollTo(0, 0);
   const secs = SECS.filter(sc => sc.key !== 'Review');
   const sets = DATA.filter(z => z.sec !== 'Review' && !z._src);
   const page = location.pathname || '/';
-  gcFreshStart();
-  const jobs = [gcCount('TOTAL'), gcCount(page)]
-    .concat(secs.map(sc => gcCount(gcSecPath(sc))))
-    .concat(secs.map(sc => gcCount(gcMissPath(sc))))
-    .concat(sets.map(z => gcCount(gcSetPath(z))));
-  const got = await Promise.allSettled(jobs);
-  if(VIEW !== 'stats') return;
-  const val = r => r.status === 'fulfilled' ? r.value : null;
+  let total = null, visits = null, secN, misN, setN, errMsg = '', badKey = false, approx = false;
+  if(r !== 'all' && key){
+    try{
+      const m = await gcApiHits(r);
+      const get = p => (m[p.toLowerCase()] || {n: 0}).n;
+      secN = secs.map(sc => get(gcSecPath(sc)));
+      misN = secs.map(sc => get(gcMissPath(sc)));
+      setN = sets.map(z => get(gcSetPath(z)));
+      visits = 0; total = 0;
+      Object.keys(m).forEach(p => { total += m[p].n; if(!m[p].ev) visits += m[p].n; });
+    }catch(e){
+      errMsg = e.message || String(e); badKey = !!e.badKey;
+      secN = secs.map(() => null); misN = secN.slice(); setN = sets.map(() => null);
+    }
+  } else {
+    /* Public counter: whole UTC days. "Last 7 days" counts from midnight UTC 6 days ago. */
+    let start = '';
+    if(r !== 'all'){ approx = true; start = new Date(Date.now() - (GC_HOURS[r] / 24 - 1) * 86400000).toISOString().slice(0, 10); }
+    gcFreshEnd();
+    const jobs = [gcCount('TOTAL', start), gcCount(page, start)]
+      .concat(secs.map(sc => gcCount(gcSecPath(sc), start)))
+      .concat(secs.map(sc => gcCount(gcMissPath(sc), start)))
+      .concat(sets.map(z => gcCount(gcSetPath(z), start)));
+    const got = await Promise.allSettled(jobs);
+    const val = x => x.status === 'fulfilled' ? x.value : null;
+    const failed = got.filter(x => x.status === 'rejected');
+    if(failed.length === got.length) errMsg = String((failed[0].reason && failed[0].reason.message) || failed[0].reason);
+    total = val(got[0]);
+    const pageN = val(got[1]);
+    secN = secs.map((_, i) => val(got[2 + i]));
+    misN = secs.map((_, i) => val(got[2 + secs.length + i]));
+    setN = sets.map((_, i) => val(got[2 + 2 * secs.length + i]));
+    /* GoatCounter keeps "/x/", "/x/index.html", "/x?y" etc. as separate pages, so the
+       count for this one path can miss visitors. Total minus the events we track covers
+       every variant; use whichever is larger. */
+    const evN = secN.concat(misN, setN).reduce((a, n) => a + (n || 0), 0);
+    visits = total == null ? pageN : Math.max(pageN || 0, total - evN);
+  }
+  if(VIEW !== 'stats' || GC_RANGE !== r) return;
   const num = v => v == null ? '–' : v.toLocaleString();
-  const failed = got.filter(r => r.status === 'rejected');
-  const total = val(got[0]), pageN = val(got[1]);
-  const secN = secs.map((_, i) => val(got[2 + i]));
-  const misN = secs.map((_, i) => val(got[2 + secs.length + i]));
-  const setN = sets.map((_, i) => val(got[2 + 2 * secs.length + i]));
-  /* GoatCounter keeps "/x/", "/x/index.html", "/x?y" etc. as separate pages, so the
-     count for this one path can miss visitors. Total minus the events we track covers
-     every variant; use whichever is larger. */
-  const evN = secN.concat(misN, setN).reduce((a, n) => a + (n || 0), 0);
-  const visits = total == null ? pageN : Math.max(pageN || 0, total - evN);
   let h = head;
-  if(failed.length === got.length){
-    h += '<p class="note" style="color:var(--bad)">Couldn’t load the counts (' + esc(String((failed[0].reason && failed[0].reason.message) || failed[0].reason)) + '). ' +
-      'In GoatCounter, open <b>Settings</b> and turn on <b>“Allow adding visitor counts on your website”</b>, then refresh. An ad blocker on this device can also block it.</p>';
+  if(errMsg){
+    h += '<p class="note" style="color:var(--bad)">Couldn’t load the counts (' + esc(errMsg) + '). ' +
+      (badKey ? 'Check that the key is right and has “Read statistics” ticked, or remove it and paste a new one.</p>' :
+        key && r !== 'all' ? 'An ad blocker on this device can block it.</p>' :
+        'In GoatCounter, open <b>Settings</b> and turn on <b>“Allow adding visitor counts on your website”</b>, then refresh. An ad blocker on this device can also block it.</p>');
   }
   h += '<div class="pair">' +
-    '<div class="tile"><span class="t" style="font-size:28px">' + num(visits) + '</span><span class="s">Visitors to the site</span></div>' +
+    '<div class="tile"><span class="t" style="font-size:28px">' + num(visits) + '</span><span class="s">Visitors to the site · ' + rl.toLowerCase() + '</span></div>' +
     '<div class="tile"><span class="t" style="font-size:28px">' + num(total) + '</span><span class="s">All tracked activity (visits + section and set opens)</span></div></div>';
   const bars = rows => {
-    const max = Math.max(1, ...rows.map(r => r.n || 0));
-    return rows.map(r => '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>' + r.label + '</span><b>' + num(r.n) + '</b></div>' +
-      '<div class="bar" style="margin:4px 0 0"><i style="width:' + ((r.n || 0) / max * 100) + '%"></i></div></div>').join('');
+    const max = Math.max(1, ...rows.map(x => x.n || 0));
+    return rows.map(x => '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>' + x.label + '</span><b>' + num(x.n) + '</b></div>' +
+      '<div class="bar" style="margin:4px 0 0"><i style="width:' + ((x.n || 0) / max * 100) + '%"></i></div></div>').join('');
   };
-  h += '<h3 style="margin-top:20px">Sections opened</h3>' + bars(secs.map((sc, i) => ({label: sc.name, n: secN[i]})));
+  h += '<h3 style="margin-top:20px">Sections opened · ' + rl.toLowerCase() + '</h3>' + bars(secs.map((sc, i) => ({label: sc.name, n: secN[i]})));
   secs.forEach((sc, si) => {
-    const rows = sets.map((z, i) => ({z, n: setN[i]})).filter(r => r.z.sec === sc.key).map(r => ({label: esc(r.z.title) + (r.z.grp ? ' <span style="color:var(--muted)">· ' + esc(r.z.grp) + '</span>' : ''), n: r.n}));
+    const rows = sets.map((z, i) => ({z, n: setN[i]})).filter(x => x.z.sec === sc.key).map(x => ({label: esc(x.z.title) + (x.z.grp ? ' <span style="color:var(--muted)">· ' + esc(x.z.grp) + '</span>' : ''), n: x.n}));
     rows.push({label: '<i>Missed questions review</i>', n: misN[si]});
     h += '<h3 style="margin-top:20px">' + sc.name + ': sets started</h3>' + bars(rows);
   });
-  h += '<p class="note">Counts are unique visitors, all time, from GoatCounter, and can take a minute or two to show up. Visitors with ad blockers aren’t counted, so real numbers are a bit higher. Section and set counts start from the day this was added.</p>' +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button>' +
-    '<a class="btn" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center" href="' + GC_SITE + '" target="_blank" rel="noopener">Open full GoatCounter dashboard</a>' +
-    '<button class="btn" data-act="gcskip">' + (gcSkipped() ? 'Count my visits on this device again' : 'Don’t count my visits on this device') + '</button></div>' +
-    '<p class="note">' + (gcSkipped() ? 'Your visits on this device are <b>not</b> being counted.' : 'Your visits on this device are being counted.') + '</p>';
+  const rangeNote = r === 'all' ? 'All time.' :
+    approx ? 'Counted in whole days (from midnight UTC), so this can include up to a day more than ' + rl.toLowerCase() + '. Add an API key on the 1 hour or 24 hours tab for exact hours.' :
+    'GoatCounter groups visits by the hour, so this counts from the start of the hour ' + GC_HOURS[r] + (GC_HOURS[r] === 1 ? ' hour' : ' hours') + ' ago (' + new Date(gcStartMs(r)).toLocaleString([], {weekday: 'short', hour: 'numeric', minute: '2-digit'}) + ').';
+  h += '<p class="note">' + rangeNote + ' Counts are unique visitors from GoatCounter, and can take a minute or two to show up. Visitors with ad blockers aren’t counted, so real numbers are a bit higher. Section and set counts start from the day they were added.</p>' + footer;
   app.innerHTML = h;
 }
 
