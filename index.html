@@ -994,7 +994,11 @@ async function initSuggest(){
    Page views are counted by the GoatCounter script in <head>. Opening a section or
    starting a practice set is also sent as an event, so the stats page can show which
    parts get used. Counts are read from GoatCounter's public counter, which must be
-   turned on in GoatCounter: Settings → "Allow adding visitor counts on your website". */
+   turned on in GoatCounter: Settings → "Allow adding visitor counts on your website".
+   GoatCounter caches each counter for 4 hours (on its server and in the browser), keyed
+   on path + start/end. A plain request can return a count from hours ago (often 0 from
+   the first time the page was opened). So each load asks with a fresh "start" date from
+   before the site existed: same all-time count, new cache key, current numbers. */
 const GC_SITE = 'https://smbcfamilycamp2010.goatcounter.com';
 function gcSlug(t){ return String(t).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 function gcSkipped(){ try{ return localStorage.getItem('skipgc') === 't'; }catch(e){ return false; } }
@@ -1011,8 +1015,14 @@ function gcMissPath(sc){ return 'missed-' + gcSlug(sc.name); }
 function gcSec(si){ const sc = SECS[si]; if(sc && sc.key !== 'Review') gcEvent(gcSecPath(sc), 'Opened section: ' + sc.name.replace(/&amp;/g, '&')); }
 function gcSet(z){ if(z && z.sec !== 'Review') gcEvent(gcSetPath(z), 'Started set: ' + z.lab); }
 function gcMissed(si){ const sc = SECS[si]; if(sc) gcEvent(gcMissPath(sc), 'Started missed questions: ' + sc.name.replace(/&amp;/g, '&')); }
+let GC_START = '';
+function gcFreshStart(){
+  const min = Math.floor(Date.now() / 60000);
+  GC_START = new Date(Date.UTC(2000, 0, 1) + (min % 9000) * 86400000).toISOString().slice(0, 10);
+}
 async function gcCount(path){
-  const res = await fetch(GC_SITE + '/counter/' + encodeURIComponent(path) + '.json');
+  if(!GC_START) gcFreshStart();
+  const res = await fetch(GC_SITE + '/counter/' + encodeURIComponent(path) + '.json?start=' + GC_START, {cache: 'no-store'});
   if(res.status === 404) return 0;
   if(!res.ok) throw new Error('HTTP ' + res.status);
   const j = await res.json();
@@ -1025,6 +1035,7 @@ async function renderStats(){
   const secs = SECS.filter(sc => sc.key !== 'Review');
   const sets = DATA.filter(z => z.sec !== 'Review' && !z._src);
   const page = location.pathname || '/';
+  gcFreshStart();
   const jobs = [gcCount('TOTAL'), gcCount(page)]
     .concat(secs.map(sc => gcCount(gcSecPath(sc))))
     .concat(secs.map(sc => gcCount(gcMissPath(sc))))
@@ -1034,10 +1045,15 @@ async function renderStats(){
   const val = r => r.status === 'fulfilled' ? r.value : null;
   const num = v => v == null ? '–' : v.toLocaleString();
   const failed = got.filter(r => r.status === 'rejected');
-  const total = val(got[0]), visits = val(got[1]);
+  const total = val(got[0]), pageN = val(got[1]);
   const secN = secs.map((_, i) => val(got[2 + i]));
   const misN = secs.map((_, i) => val(got[2 + secs.length + i]));
   const setN = sets.map((_, i) => val(got[2 + 2 * secs.length + i]));
+  /* GoatCounter keeps "/x/", "/x/index.html", "/x?y" etc. as separate pages, so the
+     count for this one path can miss visitors. Total minus the events we track covers
+     every variant; use whichever is larger. */
+  const evN = secN.concat(misN, setN).reduce((a, n) => a + (n || 0), 0);
+  const visits = total == null ? pageN : Math.max(pageN || 0, total - evN);
   let h = head;
   if(failed.length === got.length){
     h += '<p class="note" style="color:var(--bad)">Couldn’t load the counts (' + esc(String((failed[0].reason && failed[0].reason.message) || failed[0].reason)) + '). ' +
@@ -1057,7 +1073,7 @@ async function renderStats(){
     rows.push({label: '<i>Missed questions review</i>', n: misN[si]});
     h += '<h3 style="margin-top:20px">' + sc.name + ': sets started</h3>' + bars(rows);
   });
-  h += '<p class="note">Counts are unique visitors, all time, from GoatCounter. Visitors with ad blockers aren’t counted, so real numbers are a bit higher. Section and set counts start from the day this was added.</p>' +
+  h += '<p class="note">Counts are unique visitors, all time, from GoatCounter, and can take a minute or two to show up. Visitors with ad blockers aren’t counted, so real numbers are a bit higher. Section and set counts start from the day this was added.</p>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button>' +
     '<a class="btn" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center" href="' + GC_SITE + '" target="_blank" rel="noopener">Open full GoatCounter dashboard</a>' +
     '<button class="btn" data-act="gcskip">' + (gcSkipped() ? 'Count my visits on this device again' : 'Don’t count my visits on this device') + '</button></div>' +
