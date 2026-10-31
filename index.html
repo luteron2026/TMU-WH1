@@ -761,6 +761,7 @@ app.addEventListener('click', e => {
   else if(a === 'inbox') renderInbox();
   else if(a === 'stats') renderStats();
   else if(a === 'gcskip'){ gcSetSkip(!gcSkipped()); renderStats(); }
+  else if(a === 'gcser'){ if(gcSetShow(b.dataset.k, b.checked)){ if(GC_CHART) gcDrawChart(GC_CHART.s); } else b.checked = true; }
   else if(a === 'gcview'){ gcSetView(b.dataset.v); renderStats(); }
   else if(a === 'gcrange'){ gcSetRange(b.dataset.r); renderStats(); }
   else if(a === 'gckeysave'){ const el = document.getElementById('gc-key'); const k = el ? el.value.trim() : ''; if(k){ gcSetKey(k); renderStats(); } else if(el) el.focus(); }
@@ -1058,6 +1059,23 @@ async function gcApiHits(r){
 let GC_VIEWMODE = (() => { try{ return localStorage.getItem('gc_view') === 'graph' ? 'graph' : 'numbers'; }catch(e){ return 'numbers'; } })();
 function gcSetView(v){ GC_VIEWMODE = v; try{ localStorage.setItem('gc_view', v); }catch(e){} }
 let GC_TZ = '', GC_CHART = null;
+/* Which lines the graph shows (Visitors, Section & set opens); at least one stays on. */
+let GC_SHOW = (() => { try{ const o = JSON.parse(localStorage.getItem('gc_series') || '{}'); const v = o.v !== false, e = o.e !== false; return (v || e) ? {v, e} : {v: true, e: true}; }catch(err){ return {v: true, e: true}; } })();
+function gcSetShow(k, on){
+  const next = Object.assign({}, GC_SHOW, {[k]: on});
+  if(!next.v && !next.e) return false;
+  GC_SHOW = next; try{ localStorage.setItem('gc_series', JSON.stringify(GC_SHOW)); }catch(err){}
+  return true;
+}
+function gcDrawChart(s){
+  const slot = document.getElementById('gc-chart-slot');
+  if(!slot) return;
+  slot.innerHTML = gcChartSvg(s, Math.max(260, Math.round(slot.clientWidth || 340)));
+  const el = document.getElementById('gc-chart');
+  el.addEventListener('pointermove', gcChartHover);
+  el.addEventListener('pointerdown', gcChartHover);
+  el.addEventListener('pointerleave', gcChartLeave);
+}
 function gcTzOk(z){ try{ new Intl.DateTimeFormat('en', {timeZone: z}); return true; }catch(e){ return false; } }
 async function gcTz(){
   if(GC_TZ) return GC_TZ;
@@ -1116,7 +1134,7 @@ async function gcSeries(r){
 function gcFmt(ms, z, o){ try{ return new Date(ms).toLocaleString([], Object.assign({timeZone: z}, o)); }catch(e){ return new Date(ms).toLocaleString(); } }
 function gcChartSvg(s, W){
   const pts = s.pts, H = 240, L = 40, R = 12, T = 12, B = 30, iw = W - L - R, ih = H - T - B, n = pts.length;
-  const maxV = Math.max(1, ...pts.map(p => Math.max(p.v, p.e)));
+  const maxV = Math.max(1, ...pts.map(p => Math.max(GC_SHOW.v ? p.v : 0, GC_SHOW.e ? p.e : 0)));
   const mag = Math.pow(10, Math.floor(Math.log10(maxV))), nice = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= maxV / 4) || mag;
   const top = Math.ceil(maxV / nice) * nice, unit = Math.max(1, Math.round(nice));
   const x = i => L + (n <= 1 ? iw / 2 : i * iw / (n - 1)), y = v => T + ih - v / top * ih;
@@ -1139,9 +1157,9 @@ function gcChartSvg(s, W){
   GC_CHART = {s, W, H, L, R, T, ih, x, y, n};
   return '<div id="gc-chart" style="position:relative;touch-action:pan-y">' +
     '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" role="img" aria-label="Line graph of visitors and section and set opens over time" style="display:block;overflow:visible">' + g +
-    line('e', 'var(--viz2)') + line('v', 'var(--viz1)') +
+    (GC_SHOW.e ? line('e', 'var(--viz2)') : '') + (GC_SHOW.v ? line('v', 'var(--viz1)') : '') +
     '<g id="gc-hover" style="display:none"><line id="gc-hl" y1="' + T + '" y2="' + (T + ih) + '" stroke="var(--muted)" stroke-width="1"/>' +
-    '<circle id="gc-d2" r="4.5" fill="var(--viz2)" stroke="var(--card)" stroke-width="2"/><circle id="gc-d1" r="4.5" fill="var(--viz1)" stroke="var(--card)" stroke-width="2"/></g></svg>' +
+    '<circle id="gc-d2" r="4.5" fill="var(--viz2)" stroke="var(--card)" stroke-width="2"' + (GC_SHOW.e ? '' : ' display="none"') + '/><circle id="gc-d1" r="4.5" fill="var(--viz1)" stroke="var(--card)" stroke-width="2"' + (GC_SHOW.v ? '' : ' display="none"') + '/></g></svg>' +
     '<div id="gc-tip" role="status" style="display:none;position:absolute;top:0;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:.8125rem;line-height:1.45;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap"></div></div>';
 }
 function gcChartHover(ev){
@@ -1157,8 +1175,8 @@ function gcChartHover(ev){
   const tip = document.getElementById('gc-tip');
   const when = c.s.daily ? gcFmt(p.t, c.s.z, {weekday: 'short', month: 'short', day: 'numeric'}) : gcFmt(p.t, c.s.z, {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric'});
   tip.innerHTML = '<div style="color:var(--muted)">' + esc(when) + '</div>' +
-    '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz1);vertical-align:middle;margin-right:6px"></span>Visitors <b>' + p.v.toLocaleString() + '</b></div>' +
-    '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz2);vertical-align:middle;margin-right:6px"></span>Section &amp; set opens <b>' + p.e.toLocaleString() + '</b></div>';
+    (GC_SHOW.v ? '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz1);vertical-align:middle;margin-right:6px"></span>Visitors <b>' + p.v.toLocaleString() + '</b></div>' : '') +
+    (GC_SHOW.e ? '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz2);vertical-align:middle;margin-right:6px"></span>Section &amp; set opens <b>' + p.e.toLocaleString() + '</b></div>' : '');
   tip.style.display = '';
   const sx = X * box.width / c.W, tw = tip.offsetWidth;
   tip.style.left = Math.max(0, Math.min(box.width - tw, sx + (sx > box.width / 2 ? -tw - 12 : 12))) + 'px';
@@ -1179,9 +1197,10 @@ async function renderStatsGraph(head, footer, r, rl){
   const title = r === 'all' ? 'Visitors per day' : 'Visitors per hour · ' + (r === 'hour' ? 'last 24 hours' : rl.toLowerCase());
   const sw = c => '<span style="display:inline-block;width:14px;height:3px;border-radius:2px;background:' + c + ';vertical-align:middle;margin-right:6px"></span>';
   h += '<h3 style="margin:0 0 6px">' + title + '</h3>' +
-    '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.875rem;margin-bottom:8px">' +
-    '<span>' + sw('var(--viz1)') + 'Visitors <b>' + tv.toLocaleString() + '</b></span>' +
-    '<span>' + sw('var(--viz2)') + 'Section &amp; set opens <b>' + te.toLocaleString() + '</b></span></div>';
+    '<div role="group" aria-label="Lines to show" style="display:flex;gap:4px 16px;flex-wrap:wrap;font-size:.875rem;margin-bottom:4px">' +
+    [['v', 'var(--viz1)', 'Visitors', tv], ['e', 'var(--viz2)', 'Section &amp; set opens', te]].map(x =>
+      '<label style="display:inline-flex;align-items:center;gap:6px;min-height:44px;cursor:pointer"><input type="checkbox" data-act="gcser" data-k="' + x[0] + '"' + (GC_SHOW[x[0]] ? ' checked' : '') +
+      ' style="width:18px;height:18px;margin:0;accent-color:' + x[1] + '">' + sw(x[1]) + x[2] + ' <b>' + x[3].toLocaleString() + '</b></label>').join('') + '</div>';
   h += '<div id="gc-chart-slot"></div>';
   const rows = s.pts.filter(p => p.v || p.e).reverse();
   h += '<details style="margin-top:10px"><summary>Show as table</summary>' +
@@ -1192,12 +1211,7 @@ async function renderStatsGraph(head, footer, r, rl){
     (s.daily ? 'All time is shown by day for the last 180 days; hourly would be too many points to read. ' : '') +
     'Times are in your GoatCounter timezone (' + esc(s.z) + '). ' + (s.daily ? 'Each day counts unique visitors that day, so someone who comes back on two days is counted on both.' : 'Each hour counts unique visitors in that hour, so someone who stays across two hours is counted in both.') + ' Tap or hover the graph to see each ' + (s.daily ? 'day' : 'hour') + '.</p>' + footer;
   app.innerHTML = h;
-  const slot = document.getElementById('gc-chart-slot');
-  slot.innerHTML = gcChartSvg(s, Math.max(260, Math.round(slot.clientWidth || 340)));
-  const el = document.getElementById('gc-chart');
-  el.addEventListener('pointermove', gcChartHover);
-  el.addEventListener('pointerdown', gcChartHover);
-  el.addEventListener('pointerleave', gcChartLeave);
+  gcDrawChart(s);
 }
 async function renderStats(){
   VIEW = 'stats';
