@@ -378,7 +378,9 @@ function setPref(k, v){
 }
 
 let S = {qi:0, order:[], pos:0, res:{}, full:true, fb:null};
-let VIEW = 'menu', RET = 'menu', CTX = null;
+let VIEW = 'menu', RET = 'menu', CTX = null, FROM_SECRET = false;
+/* Back button for owner tools: returns to Owner tools when opened from there, otherwise to the menu */
+function ownerBackBtn(){ return FROM_SECRET ? '<button class="btn" data-act="ownerback">← Owner tools</button>' : '<button class="btn" data-act="menu">← Menu</button>'; }
 const SG = {db:null, user:null, owner:false, canWrite:null, items:null, count:null};
 const CATS = ['Wrong or unclear question','Not in my highlights','Typo','Idea or feature','Other'];
 
@@ -441,7 +443,7 @@ function closeZoom(){ const el = document.getElementById('zoomov'); if(el) el.re
 window.addEventListener('keydown', e => { if(e.key === 'Escape') closeZoom(); });
 
 function renderMenu(){
-  VIEW = 'menu';
+  VIEW = 'menu'; FROM_SECRET = false;
   if(SECI >= 0 && SECS[SECI] && SECS[SECI].key === 'Review') SECI = -1;
   const best = loadBest();
   let h = '';
@@ -620,7 +622,7 @@ function rvBuild(){
   if(RV.pos >= L.length) RV.pos = Math.max(0, L.length - 1);
 }
 function renderSecret(){
-  VIEW = 'secret';
+  VIEW = 'secret'; FROM_SECRET = true;
   app.innerHTML = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Owner tools</div></div>' +
     '<button class="card" data-rv="open"><span class="num">🔍</span><span><div class="t">Reviewer</div><div class="s">Step through every question with the answer and guide line, flag or mark as checked</div></span></button>' +
     '<button class="card" data-act="inbox"><span class="num">📥</span><span><div class="t">Suggestions inbox</div><div class="s">Only you can see this</div></span></button>' +
@@ -632,7 +634,7 @@ function renderReviewer(){
   const L = RV.list, n = L.length;
   let all = 0, chk = 0, flg = 0;
   DATA.forEach(z => { if(!rvInScope(z)) return; z.qs.forEach((q, k) => { all++; const m = RVM[rvKey(z, k)] || {}; if(m.c) chk++; if(m.f) flg++; }); });
-  let h = '<div class="top"><button class="btn" data-rv="exit">← Menu</button><div class="ttl">Reviewer</div><div class="cnt">' + (n ? RV.pos + 1 : 0) + ' / ' + n + '</div></div>';
+  let h = '<div class="top"><button class="btn" data-rv="exit">' + (FROM_SECRET ? '← Owner tools' : '← Menu') + '</button><div class="ttl">Reviewer</div><div class="cnt">' + (n ? RV.pos + 1 : 0) + ' / ' + n + '</div></div>';
   h += '<div class="rvbox"><label>Show <select id="rvf"><option value="qe"' + (RV.f === 'qe' ? ' selected' : '') + '>Quiz 2 + Exam 2 (all)</option><option value="all"' + (RV.f === 'all' ? ' selected' : '') + '>Every set</option>' +
     DATA.filter(z => z.sec !== 'Review').map(z => '<option value="' + z.id + '"' + (RV.f === String(z.id) ? ' selected' : '') + '>' + esc(z.lab || z.title) + '</option>').join('') + '</select></label>' +
     '<label>Filter <select id="rvo"><option value="all"' + (RV.only === 'all' ? ' selected' : '') + '>All questions</option><option value="todo"' + (RV.only === 'todo' ? ' selected' : '') + '>Not yet checked</option><option value="flag"' + (RV.only === 'flag' ? ' selected' : '') + '>Flagged only</option></select></label>' +
@@ -675,7 +677,7 @@ app.addEventListener('click', e => {
   const b = e.target.closest('[data-rv]'); if(!b) return;
   const a = b.dataset.rv;
   if(a === 'open'){ renderReviewer(); window.scrollTo(0, 0); return; }
-  if(a === 'exit'){ rvSaveNote(); renderMenu(); window.scrollTo(0, 0); return; }
+  if(a === 'exit'){ rvSaveNote(); if(FROM_SECRET) renderSecret(); else renderMenu(); window.scrollTo(0, 0); return; }
   if(a === 'next') return rvMove(1);
   if(a === 'prev') return rvMove(-1);
   if(a === 'p10') return rvMove(10);
@@ -737,6 +739,7 @@ app.addEventListener('click', e => {
   else if(a === 'start'){ gcSet(DATA[+b.dataset.i]); startQuiz(+b.dataset.i); }
   else if(a === 'missed'){ gcMissed(+b.dataset.s); startMissed(+b.dataset.s); }
   else if(a === 'menu') renderMenu();
+  else if(a === 'ownerback') renderSecret();
   else if(a === 'zoom') openZoom(b.dataset.m);
   else if(a === 'home'){ SECI = -1; renderMenu(); }
   else if(a === 'sec'){ SECI = +b.dataset.s; gcSec(SECI); renderMenu(); }
@@ -938,7 +941,7 @@ async function loadDbInbox(){
 }
 async function renderInbox(){
   VIEW = 'inb';
-  const head = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Suggestions inbox</div></div>';
+  const head = '<div class="top">' + ownerBackBtn() + '<div class="ttl">Suggestions inbox</div></div>';
   app.innerHTML = head + '<div class="note">Loading…</div>';
   const notes = [];
   const arch = loadArch();
@@ -1216,7 +1219,7 @@ async function renderStatsGraph(head, footer, r, rl){
 async function renderStats(){
   VIEW = 'stats';
   const r = GC_RANGE, key = gcKey(), rl = GC_RANGES.find(x => x[0] === r)[2];
-  const head = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Site stats</div></div>' +
+  const head = '<div class="top">' + ownerBackBtn() + '<div class="ttl">Site stats</div></div>' +
     '<div class="seg" role="group" aria-label="Time range" style="margin-bottom:14px">' + GC_RANGES.map(x => '<button data-act="gcrange" data-r="' + x[0] + '" aria-pressed="' + (x[0] === r) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<div class="seg" role="group" aria-label="Show as" style="margin-bottom:14px">' + [['numbers', 'Numbers'], ['graph', 'Line graph']].map(x => '<button data-act="gcview" data-v="' + x[0] + '" aria-pressed="' + (x[0] === GC_VIEWMODE) + '">' + x[1] + '</button>').join('') + '</div>';
   const keyLine = key ? '<p class="note">API key: saved on this device. <button class="link" data-act="gckeydel">Remove key</button></p>' : '';
