@@ -1023,13 +1023,13 @@ function gcSec(si){ const sc = SECS[si]; if(sc && sc.key !== 'Review') gcEvent(g
 function gcSet(z){ if(z && z.sec !== 'Review') gcEvent(gcSetPath(z), 'Started set: ' + z.lab); }
 function gcMissed(si){ const sc = SECS[si]; if(sc) gcEvent(gcMissPath(sc), 'Started missed questions: ' + sc.name.replace(/&amp;/g, '&')); }
 /* Time ranges. GoatCounter's public counter only understands whole days (start=YYYY-MM-DD,
-   midnight UTC), so "last hour" and "last 24 hours" need GoatCounter's API, which needs an
+   midnight UTC), so "last 24 hours" needs GoatCounter's API, which needs an
    API key. The key is pasted on the stats page and kept only in this browser's storage. It is
    never part of the page source. With a key, every range except "all time" uses the API
    (hourly precision). Without one, 7 and 30 days use the public counter in whole UTC days. */
-const GC_RANGES = [['hour', '1 hour', 'Last hour'], ['day', '24 hours', 'Last 24 hours'], ['week', '7 days', 'Last 7 days'], ['month', '30 days', 'Last 30 days'], ['all', 'All time', 'All time']];
-const GC_HOURS = {hour: 1, day: 24, week: 168, month: 720};
-let GC_RANGE = (() => { try{ const r = localStorage.getItem('gc_range'); return GC_RANGES.some(x => x[0] === r) ? r : 'all'; }catch(e){ return 'all'; } })();
+const GC_RANGES = [['day', '24 hours', 'Last 24 hours'], ['week', '7 days', 'Last 7 days'], ['month', '30 days', 'Last 30 days'], ['all', 'All time', 'All time']];
+const GC_HOURS = {day: 24, week: 168, month: 720};
+let GC_RANGE = (() => { try{ const r = (localStorage.getItem('gc_range') || '').replace(/^hour$/, 'day'); return GC_RANGES.some(x => x[0] === r) ? r : 'all'; }catch(e){ return 'all'; } })();
 function gcSetRange(r){ GC_RANGE = r; try{ localStorage.setItem('gc_range', r); }catch(e){} }
 function gcKey(){ try{ return localStorage.getItem('gc_api_key') || ''; }catch(e){ return ''; } }
 function gcSetKey(k){ try{ if(k) localStorage.setItem('gc_api_key', k); else localStorage.removeItem('gc_api_key'); }catch(e){} }
@@ -1116,7 +1116,7 @@ async function gcApiRaw(startMs, endMs){
    "all time" is by day over the last 180 days (hourly would be thousands of points). */
 async function gcSeries(r){
   const H = 3600000, now = Date.now(), endMs = Math.ceil(now / H) * H;
-  const daily = r === 'all', hours = r === 'hour' ? 24 : GC_HOURS[r];
+  const daily = r === 'all', hours = GC_HOURS[r];
   const startMs = daily ? Math.floor((now - 180 * 24 * H) / (24 * H)) * 24 * H : Math.floor((now - hours * H) / H) * H;
   const [hits, z] = await Promise.all([gcApiRaw(startMs, endMs), gcTz()]);
   const vis = {}, ev = {};
@@ -1197,7 +1197,7 @@ async function renderStatsGraph(head, footer, r, rl){
     return;
   }
   const tv = s.pts.reduce((a, p) => a + p.v, 0), te = s.pts.reduce((a, p) => a + p.e, 0);
-  const title = r === 'all' ? 'Visitors per day' : 'Visitors per hour · ' + (r === 'hour' ? 'last 24 hours' : rl.toLowerCase());
+  const title = r === 'all' ? 'Visitors per day' : 'Visitors per hour · ' + rl.toLowerCase();
   const sw = c => '<span style="display:inline-block;width:14px;height:3px;border-radius:2px;background:' + c + ';vertical-align:middle;margin-right:6px"></span>';
   h += '<h3 style="margin:0 0 6px">' + title + '</h3>' +
     '<div role="group" aria-label="Lines to show" style="display:flex;gap:4px 16px;flex-wrap:wrap;font-size:.875rem;margin-bottom:4px">' +
@@ -1210,7 +1210,7 @@ async function renderStatsGraph(head, footer, r, rl){
     (rows.length ? '<table style="width:100%;border-collapse:collapse;font-size:.875rem;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 0">' + (s.daily ? 'Day' : 'Hour') + '</th><th style="text-align:right">Visitors</th><th style="text-align:right">Opens</th></tr></thead><tbody>' +
       rows.map(p => '<tr style="border-top:1px solid var(--line)"><td style="padding:4px 0">' + esc(gcFmt(p.t, s.z, s.daily ? {weekday: 'short', month: 'short', day: 'numeric'} : {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric'})) + '</td><td style="text-align:right">' + p.v.toLocaleString() + '</td><td style="text-align:right">' + p.e.toLocaleString() + '</td></tr>').join('') + '</tbody></table>'
       : '<p class="note">No visits in this period.</p>') + '</details>';
-  h += '<p class="note">' + (r === 'hour' ? 'The graph shows the last 24 hours (one hour is a single point). ' : '') +
+  h += '<p class="note">' +
     (s.daily ? 'All time is shown by day for the last 180 days; hourly would be too many points to read. ' : '') +
     'Times are in your GoatCounter timezone (' + esc(s.z) + '). ' + (s.daily ? 'Each day counts unique visitors that day, so someone who comes back on two days is counted on both.' : 'Each hour counts unique visitors in that hour, so someone who stays across two hours is counted in both.') + ' Tap or hover the graph to see each ' + (s.daily ? 'day' : 'hour') + '.</p>' + footer;
   app.innerHTML = h;
@@ -1231,7 +1231,7 @@ async function renderStats(){
   if((graph || GC_HOURS[r] <= 24) && !key){
     app.innerHTML = head +
       '<h3>' + (graph ? 'The line graph' : rl) + ' needs a GoatCounter API key</h3>' +
-      '<p class="note">GoatCounter’s public counter only counts whole days' + (graph ? ' and has no hour-by-hour data' : '') + '. For ' + (graph ? 'the graph' : 'the last hour or 24 hours') + ', this page has to ask GoatCounter’s API, which needs a key. You only do this once per device. The key is saved in this browser only, and is never part of the website.</p>' +
+      '<p class="note">GoatCounter’s public counter only counts whole days' + (graph ? ' and has no hour-by-hour data' : '') + '. For ' + (graph ? 'the graph' : 'the last 24 hours') + ', this page has to ask GoatCounter’s API, which needs a key. You only do this once per device. The key is saved in this browser only, and is never part of the website.</p>' +
       '<ol class="note" style="padding-left:20px"><li>Open <a href="' + GC_SITE + '/user/api" target="_blank" rel="noopener">GoatCounter → Settings → API</a>.</li>' +
       '<li>Create a new key and tick <b>only “Read statistics”</b>.</li><li>Copy the key and paste it below.</li></ol>' +
       '<label class="lbl" for="gc-key">API key</label><input id="gc-key" class="field" autocomplete="off" spellcheck="false" placeholder="Paste your GoatCounter API key">' +
@@ -1307,8 +1307,8 @@ async function renderStats(){
     h += '<h3 style="margin-top:20px">' + sc.name + ': sets started</h3>' + bars(rows);
   });
   const rangeNote = r === 'all' ? 'All time.' :
-    approx ? 'Counted in whole days (from midnight UTC), so this can include up to a day more than ' + rl.toLowerCase() + '. Add an API key on the 1 hour or 24 hours tab for exact hours.' :
-    'GoatCounter groups visits by the hour, so this counts from the start of the hour ' + GC_HOURS[r] + (GC_HOURS[r] === 1 ? ' hour' : ' hours') + ' ago (' + new Date(gcStartMs(r)).toLocaleString([], {weekday: 'short', hour: 'numeric', minute: '2-digit'}) + ').';
+    approx ? 'Counted in whole days (from midnight UTC), so this can include up to a day more than ' + rl.toLowerCase() + '. Add an API key on the 24 hours tab for exact hours.' :
+    'GoatCounter groups visits by the hour, so this counts from the start of the hour ' + GC_HOURS[r] + ' hours ago (' + new Date(gcStartMs(r)).toLocaleString([], {weekday: 'short', hour: 'numeric', minute: '2-digit'}) + ').';
   h += '<p class="note">' + rangeNote + ' Counts are unique visitors from GoatCounter, and can take a minute or two to show up. Visitors with ad blockers aren’t counted, so real numbers are a bit higher. Section and set counts start from the day they were added.</p>' + footer;
   app.innerHTML = h;
 }
