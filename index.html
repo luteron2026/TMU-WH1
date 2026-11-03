@@ -6,6 +6,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script>/* The old "Don't count my visits" switch is gone; clear its flag so GoatCounter counts every device. */ try{ localStorage.removeItem('skipgc'); }catch(e){}</script>
 <script data-goatcounter="https://smbcfamilycamp2010.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </head><body>
 
@@ -763,7 +764,6 @@ app.addEventListener('click', e => {
   else if(a === 'sugcopy') copySuggestion();
   else if(a === 'inbox') renderInbox();
   else if(a === 'stats') renderStats();
-  else if(a === 'gcskip'){ gcSetSkip(!gcSkipped()); renderStats(); }
   else if(a === 'gcser'){ if(gcSetShow(b.dataset.k, b.checked)){ if(GC_CHART) gcDrawChart(GC_CHART.s); } else b.checked = true; }
   else if(a === 'gcview'){ gcSetView(b.dataset.v); renderStats(); }
   else if(a === 'gcrange'){ gcSetRange(b.dataset.r); renderStats(); }
@@ -1008,10 +1008,7 @@ async function initSuggest(){
    turned on in GoatCounter: Settings → "Allow adding visitor counts on your website". */
 const GC_SITE = 'https://smbcfamilycamp2010.goatcounter.com';
 function gcSlug(t){ return String(t).replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
-function gcSkipped(){ try{ return localStorage.getItem('skipgc') === 't'; }catch(e){ return false; } }
-function gcSetSkip(v){ try{ if(v) localStorage.setItem('skipgc', 't'); else localStorage.removeItem('skipgc'); }catch(e){} }
 function gcEvent(path, title, tries){
-  if(gcSkipped()) return;
   const g = window.goatcounter;
   if(g && g.count){ try{ g.count({path: path, title: title, event: true}); }catch(e){} return; }
   if((tries || 0) < 10) setTimeout(() => gcEvent(path, title, (tries || 0) + 1), 1000);
@@ -1223,10 +1220,7 @@ async function renderStats(){
     '<div class="seg" role="group" aria-label="Time range" style="margin-bottom:14px">' + GC_RANGES.map(x => '<button data-act="gcrange" data-r="' + x[0] + '" aria-pressed="' + (x[0] === r) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<div class="seg" role="group" aria-label="Show as" style="margin-bottom:14px">' + [['numbers', 'Numbers'], ['graph', 'Line graph']].map(x => '<button data-act="gcview" data-v="' + x[0] + '" aria-pressed="' + (x[0] === GC_VIEWMODE) + '">' + x[1] + '</button>').join('') + '</div>';
   const keyLine = key ? '<p class="note">API key: saved on this device. <button class="link" data-act="gckeydel">Remove key</button></p>' : '';
-  const footer = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button>' +
-    '<a class="btn" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center" href="' + GC_SITE + '" target="_blank" rel="noopener">Open full GoatCounter dashboard</a>' +
-    '<button class="btn" data-act="gcskip">' + (gcSkipped() ? 'Count my visits on this device again' : 'Don’t count my visits on this device') + '</button></div>' +
-    '<p class="note">' + (gcSkipped() ? 'Your visits on this device are <b>not</b> being counted.' : 'Your visits on this device are being counted.') + '</p>' + keyLine;
+  const footer = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button></div>' + keyLine;
   const graph = GC_VIEWMODE === 'graph';
   if((graph || GC_HOURS[r] <= 24) && !key){
     app.innerHTML = head +
