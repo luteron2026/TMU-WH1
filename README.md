@@ -2,6 +2,8 @@
 
 A self-contained study site for a World History course. It turns the course's study guides into practice quizzes and exams, so you can drill the material before Maps, Exam 1, Quiz 2 and Exam 2.
 
+**Live site: [luteron2026.github.io/TMU-WH1](https://luteron2026.github.io/TMU-WH1/)**
+
 ## What's inside
 
 - **Maps** — practice for the map quiz.
@@ -16,7 +18,7 @@ A self-contained study site for a World History course. It turns the course's st
 
 ## Using it
 
-There is nothing to install. Open `index.html` in any modern browser, on desktop or phone, or visit the site wherever it is hosted (for example, GitHub Pages).
+There is nothing to install. Visit the [live site](https://luteron2026.github.io/TMU-WH1/) in any modern browser, on desktop or phone, or open `index.html` locally. The site is published with GitHub Pages from the `main` branch.
 
 ## Project layout
 
