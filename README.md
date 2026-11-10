@@ -1,18 +1,19 @@
 # TMU-WH1 — World History Practice
 
-A self-contained study site for a World History course. It turns the course's study guides into practice quizzes and exams, so you can drill the material before Maps, Exam 1, Quiz 2 and Exam 2.
+A self-contained study site for a World History course. It turns the course's study guides into practice quizzes and exams, so you can drill the material before Maps, Quiz 1, Exam 1, Quiz 2, Exam 2 and the Final Exam.
 
 **Live site: [luteron2026.github.io/TMU-WH1](https://luteron2026.github.io/TMU-WH1/)**
 
 ## What's inside
 
 - **Maps** — practice for the map quiz.
-- **Exam 1, Quiz 2 and Exam 2** — practice sets built from the highlighted study guide material, including:
+- **Quiz 1, Exam 1, Quiz 2 and Exam 2** — practice sets built from the highlighted study guide material, including:
   - True / False
   - "Which is FALSE?"
   - "Not correctly related"
   - Matching
   - Timeline questions (dates and events from the course timelines)
+- **Final Exam** — covers note packet pages 1–80. Practice sets are coming soon.
 - **Instant feedback** — answers are marked right or wrong as you go, with progress shown for each set.
 - **Settings** — light / dark color theme, highlighter style, and reading options such as text size.
 
