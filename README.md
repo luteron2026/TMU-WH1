@@ -26,8 +26,18 @@ There is nothing to install. Visit the [live site](https://luteron2026.github.io
 | File | Purpose |
 | --- | --- |
 | `index.html` | The whole site: page, styles, scripts, questions and map images in one file |
+| `version.json` | The current version number. Open pages check it and update themselves when it goes up |
 | `favicon-32.png`, `favicon-192.png`, `apple-touch-icon.png` | Browser and home-screen icons |
 | `LICENSE` | MIT License |
+
+## Publishing an update
+
+When you change `index.html`, raise the number in **both** places so open pages pick up the change:
+
+1. `const APP_VERSION = …` near the top of the script in `index.html`
+2. `"version"` in `version.json`
+
+Visitors who already have the page open get the new version the next time they open or switch back to the tab. On the menu it reloads by itself; during a practice set an **Update now** bar appears instead, so nobody loses their place.
 
 ## Privacy
 
