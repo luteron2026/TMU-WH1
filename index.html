@@ -225,7 +225,7 @@ select.field{min-height:48px}
    endpoint / accessKey: optional. A Formspree or Web3Forms address, if you also want suggestions emailed to you.
    Set relayTopic to '' to turn the relay off.
    To open the hidden inbox: tap the small "Formats" line at the bottom of the menu 5 times, or add #inbox to the page address. */
-const APP_VERSION = 31;
+const APP_VERSION = 32;
 let UPDATE_READY = 0, LAST_CHECK = 0;
 const SUGGEST = { relayTopic: 'whx1-be9550a0735df7b80b89', endpoint: '', accessKey: '' };
 
@@ -269,6 +269,12 @@ function trackMissed(z, idx, ok){
   const m = loadMissed();
   if(!ok) m[key] = 0;
   else if(key in m){ m[key] = (m[key] || 0) + 1; if(m[key] >= 2) delete m[key]; }
+  saveMissed(m);
+}
+function clearMissed(secKey){
+  const m = loadMissed();
+  missedKeys(secKey).forEach(k => { delete m[k]; });
+  if(!secKey) Object.keys(m).forEach(k => { delete m[k]; });
   saveMissed(m);
 }
 function startMissed(si){
@@ -368,6 +374,8 @@ function renderSettings(){
   h += '<p class="set-p" style="margin-top:14px">Corners</p>' + seg('corners', [['sharp','Sharp'],['standard','Standard'],['round','Round']], PREF.corners);
   h += '<h2 class="set-h">Practice</h2>' + tog('shuf', 'Shuffle question order', SHUF ? 'On: a random order each time you start an exam' : 'Off: the usual order', SHUF) +
     tog('guide', 'Show the guide note', 'Show the line from the guide after each answer', PREF.guide);
+  const allMk = missedKeys().length;
+  h += '<button class="btn block" style="margin-top:14px" data-act="missedresetall"' + (allMk ? '' : ' disabled') + '>' + (allMk ? 'Reset missed questions (' + allMk + ')' : 'No missed questions to reset') + '</button>';
   h += '<button class="btn block reset" data-act="prefreset">Reset to defaults</button>';
   app.innerHTML = h;
 }
@@ -487,7 +495,8 @@ function renderMenu(){
       '<p class="sub">' + esc(sc.pages) + ' · ' + sets.length + ' practice sets · ' + (qn ? qn + ' questions' : 'coming soon') + '</p>' +
       '<div class="menu-note">' + sc.note + '</div>';
     const mk = missedKeys(sc.key).length;
-    if(mk) h += '<button class="card" data-act="missed" data-s="' + SECI + '"><span class="num sm">R</span><span><div class="t">Missed questions</div><div class="s">Only the ones you got wrong in ' + esc(sc.name) + '</div><div class="m">Leaves the list after you get it right twice</div></span><span class="chip">' + mk + '</span></button>';
+    if(mk) h += '<button class="card" data-act="missed" data-s="' + SECI + '"><span class="num sm">R</span><span><div class="t">Missed questions</div><div class="s">Only the ones you got wrong in ' + esc(sc.name) + '</div><div class="m">Leaves the list after you get it right twice</div></span><span class="chip">' + mk + '</span></button>' +
+      '<div style="text-align:right;margin:-6px 0 6px"><button class="link" data-act="missedreset" data-s="' + SECI + '">Reset missed questions</button></div>';
     let lastGrp = '';
     DATA.forEach((z, i) => {
       if(z.sec !== sc.key) return;
@@ -747,6 +756,8 @@ app.addEventListener('click', e => {
   else if(a === 'pref') setPref(b.dataset.pk, b.dataset.pv);
   else if(a === 'prefreset'){ PREF = Object.assign({}, DEF); savePrefs(); setShuf(false); applyPrefs(); renderSettings(); }
   else if(a === 'start'){ gcSet(DATA[+b.dataset.i]); startQuiz(+b.dataset.i); }
+  else if(a === 'missedreset'){ const sc = SECS[+b.dataset.s]; if(!sc) return; if(window.confirm && !window.confirm('Reset the missed questions list for ' + sc.name.replace(/&amp;/g, '&') + '?')) return; clearMissed(sc.key); renderMenu(); }
+  else if(a === 'missedresetall'){ if(window.confirm && !window.confirm('Reset the missed questions list for every section?')) return; clearMissed(); renderSettings(); }
   else if(a === 'missed'){ gcMissed(+b.dataset.s); startMissed(+b.dataset.s); }
   else if(a === 'menu') renderMenu();
   else if(a === 'ownerback') renderSecret();
