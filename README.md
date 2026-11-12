@@ -19,25 +19,40 @@ A self-contained study site for a World History course. It turns the course's st
 
 ## Using it
 
-There is nothing to install. Visit the [live site](https://luteron2026.github.io/TMU-WH1/) in any modern browser, on desktop or phone, or open `index.html` locally. The site is published with GitHub Pages from the `main` branch.
+There is nothing to install. Visit the [live site](https://luteron2026.github.io/TMU-WH1/) in any modern browser, on desktop or phone, or download the repository and open `index.html` locally. The site is published with GitHub Pages from the `main` branch.
 
 ## Project layout
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | The whole site: page, styles, scripts, questions and map images in one file |
+| `index.html` | The page, styles and scripts |
+| `questions.js` | Every practice set and question, one question per line |
+| `maps/` | The map images, loaded only when a map question is shown |
 | `version.json` | The current version number. Open pages check it and update themselves when it goes up |
+| `tools/check.js` | Checks the questions, map images and version numbers |
 | `favicon-32.png`, `favicon-192.png`, `apple-touch-icon.png` | Browser and home-screen icons |
 | `LICENSE` | MIT License |
 
+## Editing questions
+
+Questions live in `questions.js`. Each one has a permanent key, `"k"`, which the site uses to remember the questions a student missed. Never change a key once it is published, even if you reword or move the question.
+
+To add a question, write it without a `"k"` and run:
+
+```
+node tools/check.js --fix
+```
+
+This gives new questions their key, tidies the file, and reports problems such as an answer that is not one of the options or a missing map image. Run `node tools/check.js` (no `--fix`) to check without changing anything. It needs [Node.js](https://nodejs.org/) and nothing else.
+
 ## Publishing an update
 
-When you change `index.html`, raise the number in **both** places so open pages pick up the change:
+When you change the site, raise the number in **both** places so open pages pick up the change:
 
-1. `const APP_VERSION = …` near the top of the script in `index.html`
+1. `const APP_VERSION = …` near the bottom of `index.html`
 2. `"version"` in `version.json`
 
-Visitors who already have the page open get the new version the next time they open or switch back to the tab. On the menu it reloads by itself; during a practice set an **Update now** bar appears instead, so nobody loses their place.
+`tools/check.js` warns if the two numbers differ. Visitors who already have the page open get the new version the next time they open or switch back to the tab. On the menu it reloads by itself; during a practice set an **Update now** bar appears instead, so nobody loses their place.
 
 ## Privacy
 
