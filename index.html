@@ -150,8 +150,19 @@ button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:tra
 .missed{margin-top:16px}
 .missed h3{font-size:1.1875rem;margin-bottom:8px}
 .mi{padding:12px 14px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--card);margin-top:8px;font-size:0.90625rem}
-.mi .mq{font-family:var(--serif);font-size:1rem}
-.mi .ma{margin-top:6px;color:var(--good);font-weight:600}
+.mi + .mi{margin-top:12px}
+.mi .mq{font-family:var(--serif);font-size:1.0625rem;line-height:1.5;margin-bottom:12px}
+.mi .mapfig,.mi .items{margin-bottom:12px}
+.opts.sm{gap:6px}
+.opts.sm .opt{min-height:0;padding:8px 11px;gap:10px;font-size:0.96875rem}
+.pk{display:block;font-family:var(--display);font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:.04em;line-height:1.3;margin-bottom:1px}
+.ok > .pk,.ok > span > .pk{color:var(--good)}
+.no > .pk,.no > span > .pk{color:var(--bad)}
+.yc{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:var(--serif);font-size:1rem}
+.yc > div{padding:8px 11px;border-radius:var(--r);border:1.5px solid var(--line);overflow-wrap:anywhere}
+.yc > div:only-child{grid-column:1 / -1}
+.yc .ok{border-color:var(--good);background:var(--good-bg)}
+.yc .no{border-color:var(--bad);background:var(--bad-bg)}
 .actions{display:grid;gap:10px;margin-top:18px}
 .fine{margin-top:26px;color:var(--muted);font-size:0.8125rem;text-align:center}
 #secret{padding:16px 8px;margin-top:10px;user-select:none;-webkit-user-select:none}
@@ -232,7 +243,7 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* Bump APP_VERSION here and "version" in version.json together (see README). */
-const APP_VERSION = 34;
+const APP_VERSION = 35;
 /* The practice sets and questions live in questions.js. The version in the address makes browsers fetch the new copy after an update. */
 document.write('<script src="questions.js?v=' + APP_VERSION + '"><\/script>');
 </script>
@@ -640,7 +651,7 @@ function renderMenu(){
 function startQuiz(i, only){
   const si = SECS.findIndex(sc => sc.key === DATA[i].sec);
   if(si >= 0) SECI = si;   /* the missed-questions review is not a section of its own: stay in the one it was opened from */
-  S = {qi:i, order: only || ((SHUF || DATA[i].shuf || DATA[i].sec === 'Maps · country map key' || DATA[i].sec === 'Review') ? shuffled(DATA[i].qs.length) : DATA[i].qs.map((_, k) => k)), pos:0, res:{}, oo:{}, full: !only, fb:null};
+  S = {qi:i, order: only || ((SHUF || DATA[i].shuf || DATA[i].sec === 'Maps · country map key' || DATA[i].sec === 'Review') ? shuffled(DATA[i].qs.length) : DATA[i].qs.map((_, k) => k)), pos:0, res:{}, given:{}, oo:{}, full: !only, fb:null};
   renderQ();
 }
 /* Answer choices are shown in a new order on every run, so a retake can't be passed by remembering "it was C".
@@ -702,12 +713,34 @@ function answer(given){
   else if(q.t === 'mc') ok = (given === q.a);
   else ok = fillOK(q, given);
   S.res[idx] = ok;
+  S.given[idx] = given;
   trackMissed(q, ok);
   S.fb = {ok, given};
   renderQ();
 }
 
 /* ---------- RESULTS ---------- */
+/* One missed question, shown the way it was asked: the map or matching table, every choice in the order it was
+   on screen, the student's pick and the right answer both labelled, then the guide note. */
+function missedHtml(q, oo, given){
+  const had = given !== undefined;
+  let h = '<div class="mi"><span class="tag">' + esc(q.s) + '</span><div class="mq">' + esc(q.q) + '</div>';
+  if(q.img) h += mapImg(q.img, 'Zoomed map with a red asterisk').replace('<img ', '<img loading="lazy" ');
+  if(q.items) h += '<div class="items">' + q.items.map(t => '<div>' + esc(t) + '</div>').join('') + '</div>';
+  if(q.t === 'mc'){
+    h += '<div class="opts sm">' + (oo || q.o.map((_, k) => k)).map((k, p) => {
+      const ok = k === q.a, no = !ok && had && k === given;
+      return '<div class="opt' + (ok ? ' ok' : no ? ' no' : '') + '"><span class="l">' + 'ABCDE'[p] + '</span><span>' +
+        (ok || no ? '<small class="pk">' + (ok ? 'Correct answer' : 'Your answer') + '</small>' : '') + esc(q.o[k]) + '</span></div>';
+    }).join('') + '</div>';
+  } else {
+    const mine = q.t === 'tf' ? (given ? 'True' : 'False') : String(given);
+    h += '<div class="yc">' + (had ? '<div class="no"><small class="pk">Your answer</small>' + esc(mine) + '</div>' : '') +
+      '<div class="ok"><small class="pk">Correct answer</small>' + esc(ansText(q, oo)) + '</div></div>';
+  }
+  return h + whyHtml(q, oo) + '</div>';
+}
+
 function renderResults(){
   VIEW = 'res';
   const z = DATA[S.qi];
@@ -722,10 +755,7 @@ function renderResults(){
     '<div class="sect">' + Object.keys(secs).map(s => '<div class="r"><span>' + esc(s) + '</span><b>' + secs[s].r + '/' + secs[s].t + '</b></div>').join('') + '</div>';
   if(missed.length){
     h += '<div class="missed"><h3>Review what you missed (' + missed.length + ')</h3>' + missed.map(i => {
-      const q = z.qs[i];
-      return '<div class="mi"><div class="mq">' + esc(q.q) + '</div>' +
-        (q.t === 'tf' || q.t === 'fill' || q.t === 'mc' ? '<div class="ma">Answer: ' + esc(ansText(q, S.oo[i])) + '</div>' : '') +
-        whyHtml(q, S.oo[i]) + '</div>';
+      return missedHtml(z.qs[i], S.oo[i], (S.given || {})[i]);
     }).join('') + '</div>';
   } else {
     h += '<div class="menu-note" style="margin-top:16px">Perfect run. Nothing to review.</div>';
