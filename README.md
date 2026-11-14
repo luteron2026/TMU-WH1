@@ -28,8 +28,9 @@ There is nothing to install. Visit the [live site](https://luteron2026.github.io
 | `index.html` | The page, styles and scripts |
 | `questions.js` | Every practice set and question, one question per line |
 | `maps/` | The map images, loaded only when a map question is shown |
+| `preview.png` | The picture shown when the link is shared in a chat or on social media |
 | `version.json` | The current version number. Open pages check it and update themselves when it goes up |
-| `tools/check.js` | Checks the questions, map images and version numbers |
+| `tools/check.js` | Checks the questions, map images, version numbers and updated date |
 | `favicon-32.png`, `favicon-192.png`, `apple-touch-icon.png` | Browser and home-screen icons |
 | `LICENSE` | MIT License |
 
@@ -52,9 +53,11 @@ When you change the site, raise the number in **both** places so open pages pick
 1. `const APP_VERSION = …` near the bottom of `index.html`
 2. `"version"` in `version.json`
 
-Use whole numbers (36, 37, 38…). The menu shows the number with two extra digits after a dot, like **Version 37.19**. Those digits are picked automatically and change with every update, so there is nothing more to edit.
+Also set `const APP_UPDATED = …` (the line under `APP_VERSION`) to today's date, written like `2026-11-14`. The menu shows it as **Updated Nov 14, 2026**.
 
-`tools/check.js` warns if the two numbers differ. Visitors who already have the page open get the new version the next time they open or switch back to the tab. On the menu it reloads by itself; during a practice set an **Update now** bar appears instead, so nobody loses their place.
+Use whole numbers (36, 37, 38…). The menu shows the number with two extra digits after a dot, like **v37.19**. Those digits are picked automatically and change with every update, so there is nothing more to edit.
+
+`tools/check.js` warns if the two numbers differ, and points out when the date is not today's. Visitors who already have the page open get the new version the next time they open or switch back to the tab. On the menu it reloads by itself; during a practice set an **Update now** bar appears instead, so nobody loses their place.
 
 ## Privacy
 
