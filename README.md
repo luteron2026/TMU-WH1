@@ -52,6 +52,8 @@ When you change the site, raise the number in **both** places so open pages pick
 1. `const APP_VERSION = …` near the bottom of `index.html`
 2. `"version"` in `version.json`
 
+Use whole numbers (36, 37, 38…). The menu shows the number with two extra digits after a dot, like **Version 37.19**. Those digits are picked automatically and change with every update, so there is nothing more to edit.
+
 `tools/check.js` warns if the two numbers differ. Visitors who already have the page open get the new version the next time they open or switch back to the tab. On the menu it reloads by itself; during a practice set an **Update now** bar appears instead, so nobody loses their place.
 
 ## Privacy

@@ -243,7 +243,10 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* Bump APP_VERSION here and "version" in version.json together (see README). */
-const APP_VERSION = 36;
+const APP_VERSION = 37;
+/* The number shown on the menu, like "37.19". The part after the dot is worked out from APP_VERSION,
+   so it changes to a new number from 01 to 99 on every update and everyone sees the same one. */
+const APP_VERSION_LABEL = APP_VERSION + '.' + String((Math.imul(APP_VERSION, 2654435761) >>> 0) % 99 + 1).padStart(2, '0');
 /* The practice sets and questions live in questions.js. The version in the address makes browsers fetch the new copy after an update. */
 document.write('<script src="questions.js?v=' + APP_VERSION + '"><\/script>');
 </script>
@@ -614,7 +617,7 @@ function renderMenu(){
         (SG.count != null ? '<span class="chip">' + SG.count + ' open</span>' : '') + '</button>';
     }
     h += '<p class="fine" id="secret">Formats: Maps · True / False · Not correctly related · Which is FALSE · Matching · Fill in</p>';
-    h += '<p class="fine" style="margin-top:4px">Version ' + APP_VERSION + ' · Nov 12, 2026</p>';
+    h += '<p class="fine" style="margin-top:4px">Version ' + APP_VERSION_LABEL + ' · Nov 14, 2026</p>';
   } else {
     const sc = SECS[SECI];
     const sets = DATA.filter(z => z.sec === sc.key);
