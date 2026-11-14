@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Checks questions.js, the map images and the version numbers.
+/* Checks questions.js, the map images, the version numbers and the updated date.
 
      node tools/check.js         check only
      node tools/check.js --fix   also give new questions their permanent key ("k")
@@ -71,6 +71,14 @@ try{
   const a = (html.match(/const APP_VERSION = (\d+)/) || [])[1];
   const b = JSON.parse(fs.readFileSync(path.join(root, 'version.json'), 'utf8')).version;
   if(String(a) !== String(b)) errors.push('Version mismatch: index.html says ' + a + ', version.json says ' + b);
+  /* The "Updated" date on the menu is typed by hand, so make sure it is a real date and point out when it is not today's. */
+  const d = (html.match(/const APP_UPDATED = '([^']*)'/) || [])[1];
+  const n = new Date(), today = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+  const real = /^\d{4}-\d{2}-\d{2}$/.test(d || '') && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
+  if(!real) errors.push('APP_UPDATED in index.html must be a real date written like ' + today + ' (it says ' + d + ')');
+  else if(d > today) errors.push('APP_UPDATED in index.html is in the future: ' + d);
+  else if(d !== today) warns.push('APP_UPDATED in index.html says ' + d + '. If you are publishing an update today, change it to ' + today);
+  if(!fs.existsSync(path.join(root, 'preview.png'))) errors.push('Missing preview.png, the image shown when the link is shared');
 }catch(e){ errors.push('Could not read the version numbers: ' + e.message); }
 
 if(fix){
