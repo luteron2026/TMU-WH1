@@ -46,6 +46,7 @@ DATA.forEach(z => {
       }
     } else if(q.t === 'tf'){
       if(typeof q.a !== 'boolean') errors.push(where + ': answer must be true or false');
+      if((q.why.match(/Clause \d+:/g) || []).length > 2 || (q.src || []).length > 2) errors.push(where + ': True / False has more than two facts. Keep it to one or two');
     } else if(q.t === 'fill'){
       if(!Array.isArray(q.acc) || !q.acc.length || !q.shown) errors.push(where + ': needs "acc" and "shown"');
     } else errors.push(where + ': unknown type "' + q.t + '"');
