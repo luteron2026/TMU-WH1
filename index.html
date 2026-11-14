@@ -122,8 +122,24 @@ button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:tra
 .fb.no{background:var(--bad-bg);color:var(--bad)}
 .fb b{font-family:var(--display);font-size:1.0625rem}
 .fb .ans{color:var(--ink);margin-top:4px;font-size:0.96875rem;font-family:var(--serif)}
-.guide{margin-top:10px;padding:12px 14px;border-radius:var(--r2);background:var(--hl);border:1px solid var(--hl-line);color:var(--ink);font-family:var(--serif);font-size:0.9375rem;line-height:1.5}
-.guide small{display:block;font-family:var(--display);font-weight:700;font-size:0.78125rem;opacity:.8;margin-bottom:3px}
+.guide{margin-top:10px;padding:13px 14px 14px;border-radius:var(--r2);background:var(--hl);border:1px solid var(--hl-line);color:var(--ink);font-family:var(--serif);font-size:1rem;line-height:1.5}
+.guide small{display:block;font-family:var(--display);font-weight:700;font-size:0.78125rem;opacity:.8;margin-bottom:6px}
+.guide p{margin:0}
+.guide p + .glist,.guide .glist + p{margin-top:8px}
+.glist{list-style:none;margin:0;padding:0}
+.glist li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--hl-line)}
+.glist li:first-child{border-top:0;padding-top:0}
+.glist li:last-child{padding-bottom:0}
+.gk{flex:none;min-width:26px;height:26px;padding:0 7px;border-radius:13px;border:1.5px solid currentColor;font-family:var(--display);font-weight:700;font-size:0.8125rem;line-height:1;display:flex;align-items:center;justify-content:center;margin-top:-1px;font-variant-numeric:tabular-nums}
+.glist.wide .gk{min-width:54px}
+.glist li.ok .gk{color:var(--good)}
+.glist li.no .gk{color:var(--bad);background:var(--bad-bg)}
+.gb{flex:1;min-width:0;overflow-wrap:anywhere}
+.glist s{text-decoration-color:var(--bad);text-decoration-thickness:1.5px}
+.gfix{margin-top:4px}
+.gl{font-family:var(--display);font-weight:700;font-size:0.78125rem;text-transform:uppercase;letter-spacing:.04em;color:var(--good);margin-right:2px}
+.chg{font-weight:700;box-shadow:inset 0 -2px 0 var(--good)}
+.gnote{font-family:var(--sans);font-size:0.875rem;color:var(--muted)}
 .next{margin-top:14px}
 .score{text-align:center;padding:24px 16px}
 .score .big{font-family:var(--display);font-size:4rem;font-weight:800;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
@@ -216,7 +232,7 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* Bump APP_VERSION here and "version" in version.json together (see README). */
-const APP_VERSION = 33;
+const APP_VERSION = 34;
 /* The practice sets and questions live in questions.js. The version in the address makes browsers fetch the new copy after an update. */
 document.write('<script src="questions.js?v=' + APP_VERSION + '"><\/script>');
 </script>
@@ -433,6 +449,112 @@ function ansText(q, oo){
   return q.shown;
 }
 
+/* ---------- GUIDE NOTE ----------
+   The note under each answer is stored as one sentence or paragraph ("why"). whyHtml() lays it out so it can be
+   read at a glance: one row per choice, clause or match, with the part that was changed marked.
+   Anything it does not recognise is shown as plain text, so a new wording can never break the page. */
+function gWords(t){ return t.split(/\s+/).filter(Boolean); }
+function gKey(w){ return w.toLowerCase().replace(/[^a-z0-9]/g, ''); }
+function gLcs(a, b){
+  const n = a.length, m = b.length, T = [];
+  for(let i = 0; i <= n; i++){ T.push(new Array(m + 1).fill(0)); }
+  for(let i = n - 1; i >= 0; i--) for(let j = m - 1; j >= 0; j--) T[i][j] = (a[i] && a[i] === b[j]) ? T[i + 1][j + 1] + 1 : Math.max(T[i + 1][j], T[i][j + 1]);
+  const keep = new Array(n).fill(false);
+  let i = 0, j = 0;
+  while(i < n && j < m){
+    if(a[i] && a[i] === b[j]){ keep[i] = true; i++; j++; }
+    else if(T[i + 1][j] >= T[i][j + 1]) i++; else j++;
+  }
+  return {len: T[0][0], keep};
+}
+/* The guide's wording, with the words that differ from the wrong statement marked. */
+function markDiff(fix, wrong){
+  const A = gWords(fix), B = gWords(wrong || ''), ka = A.map(gKey), kb = B.map(gKey);
+  if(!B.length) return esc(fix);
+  const win = A.length + 1;
+  let best = null;
+  for(let st = 0; st === 0 || st + win <= kb.length; st++){
+    const r = gLcs(ka, kb.slice(st, st + win));
+    if(!best || r.len > best.len) best = r;
+  }
+  const chg = ka.map((k, i) => !!k && !best.keep[i]);
+  const cnt = chg.filter(Boolean).length;
+  if(!cnt || cnt > Math.max(3, A.length * 0.5)) return esc(fix);
+  let h = '', open = false;
+  A.forEach((w, i) => {
+    /* closing punctuation stays outside the mark */
+    const m = /^(.*?)([.,;:!?”’)]*)$/.exec(w), core = chg[i] ? m[1] : w, tail = chg[i] ? m[2] : '';
+    if(chg[i] && !open){ h += '<b class="chg">'; open = true; }
+    if(!chg[i] && open){ h = h.replace(/ $/, '') + '</b> '; open = false; }
+    h += esc(core);
+    if(tail){ h += '</b>' + esc(tail); open = false; }
+    h += ' ';
+  });
+  h = h.replace(/ $/, '');
+  return open ? h + '</b>' : h;
+}
+function gLetter(q, oo, k){ return 'ABCDE'[oo ? oo.indexOf(k) : k] || ''; }
+function gRow(cls, key, body){ return '<li class="' + cls + '"><span class="gk">' + key + '</span><div class="gb">' + body + '</div></li>'; }
+function gNoDot(t){ return t.replace(/\.$/, ''); }
+/* "Term -- wrong half" plus the note's "“Term” goes with “right half”, not “wrong half”." */
+function gPair(q, k, text){
+  const o = q.o[k] || '', cut = o.indexOf(' -- ');
+  if(cut < 0) return null;
+  const x = o.slice(0, cut), z = o.slice(cut + 4), pre = '“' + x + '” goes with “';
+  if(text.indexOf(pre) !== 0) return {x, z, y: null};
+  const rest = text.slice(pre.length), at = rest.lastIndexOf(' not “');
+  if(at < 0) return {x, z, y: null};
+  return {x, z, y: rest.slice(0, at).replace(/(,”|”,)$/, '')};
+}
+function gPairBad(p){ return '<b>' + esc(p.x) + '</b> — <s>' + esc(p.z) + '</s><div class="gfix"><span class="gl">Goes with</span> <b>' + esc(p.y) + '</b></div>'; }
+function whyBody(q, oo){
+  const w = q.why || '';
+  let m;
+  if(q.t === 'mc' && /^A: (NOT related|related)\. /.test(w)){
+    const re = /([A-D]): (NOT related|related)\. ([\s\S]*?)(?= [A-D]: (?:NOT related|related)\. |$)/g, rows = [];
+    while((m = re.exec(w))){
+      const k = 'ABCD'.indexOf(m[1]), p = gPair(q, k, m[3]);
+      if(!p || (m[2] !== 'related' && !p.y)) return null;
+      rows.push({k, pos: oo ? oo.indexOf(k) : k, bad: m[2] !== 'related', p});
+    }
+    if(rows.length !== q.o.length - 1) return null;
+    rows.sort((a, b) => a.pos - b.pos);
+    return '<ul class="glist">' + rows.map(r => gRow(r.bad ? 'no' : 'ok', gLetter(q, oo, r.k), r.bad ? gPairBad(r.p) : '<b>' + esc(r.p.x) + '</b> — ' + esc(r.p.z))).join('') + '</ul>';
+  }
+  if(q.t === 'mc' && q.o[q.a] && q.o[q.a].indexOf(' -- ') > 0){
+    const p = gPair(q, q.a, w);
+    return p && p.y ? '<ul class="glist">' + gRow('no', gLetter(q, oo, q.a), gPairBad(p)) + '</ul>' : null;
+  }
+  if(q.t === 'tf' && /^Clause 1: /.test(w)){
+    const note = / (One false clause makes the whole statement False\.|The whole statement is True only if every clause is True\.)$/.exec(w);
+    const parts = (note ? w.slice(0, note.index) : w).split(/\s*Clause \d+: /).slice(1), rows = [];
+    for(const part of parts){
+      if((m = /^True \(([\s\S]*)\),?$/.exec(part))) rows.push(gRow('ok', 'True', esc(gNoDot(m[1]) + '.')));
+      else if((m = /^False\. The (?:study )?guide says: ([\s\S]*)$/.exec(part))) rows.push(gRow('no', 'False', '<span class="gl">The guide says</span> ' + markDiff(m[1], q.q)));
+      else return null;
+    }
+    return rows.length ? '<ul class="glist wide">' + rows.join('') + '</ul>' + (note ? '<p class="gnote">' + esc(note[1]) + '</p>' : '') : null;
+  }
+  if(q.items && (m = /^([\s\S]*?)\s*Correct matches: ([\s\S]*)$/.exec(w))){
+    const pairs = gNoDot(m[2]).split('; ').map(t => t.split(' → '));
+    if(pairs.length !== q.items.length / 2 || pairs.some(p => p.length !== 2)) return null;
+    return (m[1] ? '<p>' + esc(m[1]) + '</p>' : '') + '<ul class="glist">' + pairs.map((p, i) => {
+      const hit = q.items.find(t => /^[A-E]\. /.test(t) && t.slice(3) === p[1]);
+      return gRow('ok', (i + 1) + (hit ? '-' + hit[0] : ''), '<b>' + esc(p[0]) + '</b> — ' + esc(p[1]));
+    }).join('') + '</ul>';
+  }
+  if(q.t === 'tf' && (m = /^False\. The (?:study )?guide says: ([\s\S]*)$/.exec(w)))
+    return '<p><span class="gl">The guide says</span> ' + markDiff(m[1], q.q) + '</p>';
+  if(q.t === 'mc' && q.a < q.o.length - 1 && (m = /^(?:“[\s\S]*” is the false one\. )?The (?:study )?guide says: ([\s\S]*)$/.exec(w)))
+    return '<ul class="glist">' + gRow('no', gLetter(q, oo, q.a), '<s>' + esc(q.o[q.a]) + '</s><div class="gfix"><span class="gl">The guide says</span> ' + markDiff(m[1], q.o[q.a]) + '</div>') + '</ul>';
+  return null;
+}
+function whyHtml(q, oo, label){
+  let body = null;
+  try{ body = whyBody(q, oo); }catch(e){}
+  return '<div class="guide"><small>' + (label || 'From the study guide') + '</small>' + (body || '<p>' + esc(q.why) + '</p>') + '</div>';
+}
+
 /* ---------- MENU ---------- */
 const SECS = (() => {
   const meta = {};
@@ -559,7 +681,7 @@ function renderQ(){
   if(fb){
     h += '<div class="fb ' + (fb.ok ? 'ok' : 'no') + '" tabindex="-1"><b>' + (fb.ok ? 'Correct' : 'Not quite') + '</b>' +
       (fb.ok ? '' : '<div class="ans">Correct answer: ' + esc(ansText(q, S.oo[idx])) + '</div>') + '</div>' +
-      (PREF.guide ? '<div class="guide"><small>From the study guide</small>' + esc(q.why) + '</div>' : '') +
+      (PREF.guide ? whyHtml(q, S.oo[idx]) : '') +
       '<button class="btn primary block next" data-act="next">' + (S.pos + 1 < n ? 'Next question' : 'See results') + '</button>' +
       '<div style="text-align:center"><button class="link" data-act="report">Report a problem with this question</button></div>';
   }
@@ -603,7 +725,7 @@ function renderResults(){
       const q = z.qs[i];
       return '<div class="mi"><div class="mq">' + esc(q.q) + '</div>' +
         (q.t === 'tf' || q.t === 'fill' || q.t === 'mc' ? '<div class="ma">Answer: ' + esc(ansText(q, S.oo[i])) + '</div>' : '') +
-        '<div class="guide"><small>From the study guide</small>' + esc(q.why) + '</div></div>';
+        whyHtml(q, S.oo[i]) + '</div>';
     }).join('') + '</div>';
   } else {
     h += '<div class="menu-note" style="margin-top:16px">Perfect run. Nothing to review.</div>';
@@ -691,7 +813,7 @@ function renderReviewer(){
       h += '<div class="opts">' + q.o.map((o, k) => '<div class="opt' + (k === q.a ? ' ok' : '') + '"><span class="l">' + 'ABCDE'[k] + '</span><span>' + esc(o) + '</span></div>').join('') + '</div>';
     }
     h += '<div class="fb ok"><b>Answer</b><div class="ans">' + esc(ansText(q)) + '</div></div>' +
-      '<div class="guide"><small>Guide line</small>' + esc(q.why) + '</div>' +
+      whyHtml(q, null, 'Guide line') +
       '<div class="rvact"><button class="btn' + (m.c ? ' primary' : '') + '" data-rv="chk">' + (m.c ? '✓ Checked' : 'Mark checked') + '</button>' +
       '<button class="btn' + (m.f ? ' primary' : '') + '" data-rv="flag">' + (m.f ? '⚑ Flagged' : '⚑ Flag') + '</button>' +
       '<button class="btn" data-rv="nextTodo">Next unchecked »</button></div>' +
