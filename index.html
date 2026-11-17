@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>World History Practice: Maps, Quizzes, Exams and Final</title>
 <meta name="description" content="Free practice quizzes and exams for World History 1: map questions, true/false, matching, multiple choice and timeline dates, with instant feedback.">
 <!-- Link preview: the card that chat apps and social sites show when the address is shared. They need the full address of the image. -->
@@ -18,14 +18,10 @@
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<script>/* Paint the saved theme's background straight away, so a chosen theme never flashes the default colours while the questions load. */
+(function(){ try{ var p = JSON.parse(localStorage.getItem('wh1_paint_v1')); if(p){ var d = p.m === 'dark' || (p.m !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches), r = document.documentElement; r.setAttribute('data-theme', d ? 'dark' : 'light'); r.style.setProperty('--bg', d ? p.d : p.l); r.style.colorScheme = d ? 'dark' : 'light'; } }catch(e){} })();</script>
 <script>/* The old "Don't count my visits" switch is gone; clear its flag so GoatCounter counts every device. */ try{ localStorage.removeItem('skipgc'); }catch(e){}</script>
 <script data-goatcounter="https://smbcfamilycamp2010.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
-</head><body>
-
-
-
-
-
 <style>
 :root{
   box-sizing:border-box;
@@ -249,13 +245,12 @@ select.field{min-height:48px}
 .rvnote{width:100%;margin-top:12px;padding:10px;font:inherit;border-radius:var(--r);border:1.5px solid var(--line);background:var(--bg);color:var(--ink);box-sizing:border-box}
 .rvfoot{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
 </style>
-
-
+</head><body>
 <div id="app"></div>
 <script>
-/* On every update: bump APP_VERSION here and "version" in version.json together, and set APP_UPDATED to today (see README). */
-const APP_VERSION = 39;
-const APP_UPDATED = '2026-11-14';
+/* On every update, run: node tools/check.js --release   It raises APP_VERSION here and "version" in version.json together, and sets APP_UPDATED to today (see README). */
+const APP_VERSION = 40;
+const APP_UPDATED = '2026-11-17';
 /* The number shown on the menu, like "v37.19". The part after the dot is worked out from APP_VERSION,
    so it changes to a new number from 01 to 99 on every update and everyone sees the same one. */
 const APP_VERSION_LABEL = APP_VERSION + '.' + String((Math.imul(APP_VERSION, 2654435761) >>> 0) % 99 + 1).padStart(2, '0');
@@ -276,19 +271,8 @@ const SUGGEST = { relayTopic: 'whx1-be9550a0735df7b80b89', endpoint: '', accessK
 
 
 const app = document.getElementById('app');
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LS = 'wh1_all_best_v1';
-function loadBest(){
-  try{
-    const cur = localStorage.getItem(LS);
-    if(cur) return JSON.parse(cur);
-    // first run of the combined page: carry over scores from the two separate pages, if present
-    const out = {};
-    try{ const a = JSON.parse(localStorage.getItem('wh1_exam1_best_v2') || '{}'); Object.keys(a).forEach(k => { out[k] = a[k]; }); }catch(e){}
-    try{ const b = JSON.parse(localStorage.getItem('wh1_exam2_best_v1') || '{}'); Object.keys(b).forEach(k => { out[+k + 5] = b[k]; }); }catch(e){}
-    return out;
-  }catch(e){ return {}; }
-}
+function loadBest(){ try{ return JSON.parse(localStorage.getItem(LS) || '{}') || {}; }catch(e){ return {}; } }
 function saveBest(id, score, total){
   try{
     const b = loadBest(), o = b[id];
@@ -331,15 +315,22 @@ function clearMissed(secKey){
   if(!secKey) Object.keys(m).forEach(k => { delete m[k]; });
   saveMissed(m);
 }
+/* The missed-questions review is a made-up set holding the given questions. It takes the place of any earlier one. */
+function reviewSet(si, keys){
+  const sc = SECS[si]; if(!sc) return -1;
+  const qs = keys.map(k => { const o = (QIDX[k] || []).find(x => x.sec === sc.key); return o && o.q; });
+  if(!qs.length || qs.some(q => !q)) return -1;
+  const z = {id:'M', num:'R', badge:'R', title:'Missed questions', lab:sc.name.replace(/&amp;/g, '&') + ' · missed questions', sec:'Review', grp:'', sub:'', qs:qs, _src:keys, _sec:sc.key};
+  let at = DATA.findIndex(d => d.sec === 'Review');
+  if(at >= 0) DATA[at] = z; else at = DATA.push(z) - 1;
+  return at;
+}
 function startMissed(si){
-  const sc = SECS[si]; if(!sc) return;
-  const keys = missedKeys(sc.key); if(!keys.length) return;
-  const qs = keys.map(k => QIDX[k].find(o => o.sec === sc.key).q);
-  const z = {id:'M', num:'R', badge:'R', title:'Missed questions', lab:sc.name.replace(/&amp;/g, '&') + ' · missed questions', sec:'Review', grp:'', sub:'', qs:qs, _src:keys};
-  const at = DATA.findIndex(d => d.sec === 'Review');
-  if(at >= 0) DATA[at] = z; else DATA.push(z);
+  const sc = SECS[si]; if(!sc) return false;
+  const at = reviewSet(si, missedKeys(sc.key)); if(at < 0) return false;
   SECI = si;
-  startQuiz(DATA.findIndex(d => d.sec === 'Review'));
+  startQuiz(at);
+  return true;
 }
 const SHK = 'wh1_shuffle_v1';
 function getShuf(){ try{ return localStorage.getItem(SHK) === '1'; }catch(e){ return false; } }
@@ -398,6 +389,8 @@ function applyPrefs(){
   const co = CORNERS[PREF.corners] || CORNERS.standard; set('--r', co[0]); set('--r2', co[1]);
   set('--scale', String(parseFloat(PREF.size) || 1));
   r.style.colorScheme = dark ? 'dark' : 'light';
+  /* Remembered for the small script in <head>, which paints the background before this file has loaded. */
+  try{ localStorage.setItem('wh1_paint_v1', JSON.stringify({m: PREF.mode, l: t.L.bg, d: PREF.black ? '#000000' : t.D.bg})); }catch(e){}
 }
 applyPrefs();
 if(mq){ const onChg = () => { if(PREF.mode === 'system'){ applyPrefs(); if(VIEW === 'settings') renderSettings(); } }; if(mq.addEventListener) mq.addEventListener('change', onChg); else if(mq.addListener) mq.addListener(onChg); }
@@ -451,13 +444,13 @@ function setPref(k, v){
   if(el) el.focus({preventScroll:true});
 }
 
-let S = {qi:0, order:[], pos:0, res:{}, full:true, fb:null};
+let S = {qi:0, order:[], pos:0, res:{}, given:{}, oo:{}, full:true, fb:null};
 let VIEW = 'menu', RET = 'menu', CTX = null, FROM_SECRET = false;
-/* Back button for owner tools: returns to Owner tools when opened from there, otherwise to the menu */
-function ownerBackBtn(){ return FROM_SECRET ? '<button class="btn" data-act="ownerback">← Owner tools</button>' : '<button class="btn" data-act="menu">← Menu</button>'; }
-const SG = {db:null, user:null, owner:false, canWrite:null, items:null, count:null};
 const CATS = ['Wrong or unclear question','Not in my highlights','Typo','Idea or feature','Other'];
 
+/* ===== ANSWER CHECKING AND GUIDE NOTES =====
+   tools/test.js runs everything from here to "END OF TESTED CODE", so keep this part free of anything that touches the page. */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function norm(s){
   return String(s).toLowerCase()
     .replace(/\b(b\.?\s?c\.?|a\.?\s?d\.?)(?=\s|$)/g,' ')
@@ -465,7 +458,11 @@ function norm(s){
     .replace(/\b(the|a|an)\b/g,' ')
     .replace(/\s+/g,' ').trim();
 }
+/* A fill-in is normally marked generously: capitals, punctuation, "the" and "BC" are ignored, and a short answer that
+   contains the right word counts. A question with "exact": true must be typed as the word itself, spelled correctly
+   (capitals still do not matter). */
 function fillOK(q, val){
+  if(q.exact){ const v = String(val).trim().replace(/\s+/g, ' ').toLowerCase(); return !!v && q.acc.some(a => String(a).trim().replace(/\s+/g, ' ').toLowerCase() === v); }
   const n = norm(val);
   if(!n) return false;
   const toks = n.split(' ');
@@ -582,18 +579,11 @@ function whyHtml(q, oo, label){
   try{ body = whyBody(q, oo); }catch(e){}
   return '<div class="guide"><small>' + (label || 'From the study guide') + '</small>' + (body || '<p>' + esc(q.why) + '</p>') + '</div>';
 }
+/* ===== END OF TESTED CODE ===== */
 
 /* ---------- MENU ---------- */
-const SECS = (() => {
-  const meta = {};
-  meta['Maps · country map key'] = {badge: 'MAP', name: 'Maps', pages: 'Country map key #1–80 · 5 course maps', note: "Just like the real exam: a map zoomed in on one region, a red asterisk inside a country, and the question \"Which country contains the RED asterisk *\". Pick from four countries, or choose \"None of the above\" when the answer is not listed. Each continent set asks every country on that map once (Country Map Key #1–80), and the two mixed sets ask all 80 again from new views."};
-  meta['Quiz 1 & Exam 1 · note packet pages 1–32'] = {badge: 'Q1<br>E1', name: 'Quiz 1 &amp; Exam 1', pages: 'Note packet pages 1–32', note: "Quiz 1 sets cover note packet pages 1–16. Exam 1 sets cover pages 1–32. Quiz 1 Practice 1–3 and Exam 1 Practice 1–4 mix topics. Quiz 1 Practice 4 and Exam 1 Practice 5 are timeline dates only. Every question is built from the <b>study guide</b> material, in the same formats as the sample exam questions."};
-  meta['Quiz 2 & Exam 2 · note packet pages 33–64'] = {badge: 'Q2<br>E2', name: 'Quiz 2 &amp; Exam 2', pages: 'Note packet pages 33–64', note: "Quiz 2 sets cover note packet pages 33–41 and 46–51. Exam 2 sets cover pages 33–64. Quiz 2 Practice 1–3 and Exam 2 Practice 1–5 mix topics. Quiz 2 Practice 4 and Exam 2 Practice 6 are timeline dates only. Every question is built from the <b>study guide</b> material, in the same formats as the sample exam questions."};
-  meta['Final Exam · note packet pages 1–80'] = {badge: 'FINAL', name: 'Final Exam', pages: 'Note packet pages 1–80', note: "<b>Coming soon.</b> Non-Comprehensive sets cover note packet pages 65–80 (15 points: 5 true/false, 8 multiple choice or matching, 2 fill-in). Worldview sets cover the worldview terms (5 points: 10 one-word fill-ins, exact word and spelling). Comprehensive sets cover pages 1–80 (30 points: 10 true/false, 20 multiple choice or matching, no dates, maps or fill-ins). Non-Comprehensive Practice 1–4 and Comprehensive Practice 1–5 mix topics. Non-Comprehensive Practice 5 is timeline dates only, from pages 65 and 71. Every question will be built from the <b>study guide</b> material, in the same formats as the sample exam questions."};
-  const keys = [];
-  DATA.forEach(z => { if(keys.indexOf(z.sec) < 0) keys.push(z.sec); });
-  return keys.map(k => Object.assign({key: k}, meta[k]));
-})();
+/* The sections on the front page (badge, name, pages, note) are listed in questions.js, next to the sets that belong to them. */
+const SECS = SECTIONS;
 let SECI = -1;
 
 /* Map images are separate files in maps/, fetched only when a map question is shown. */
@@ -610,6 +600,7 @@ function renderMenu(){
     const total = DATA.reduce((n, z) => n + z.qs.length, 0);
     h += '<h1><span class="mk">World History&nbsp;1</span> Practice</h1>' +
       '<p class="disc"><b>Disclaimer:</b> This is an unofficial study aid created by a fellow classmate with the help of AI. It was not produced by the professor or the course, and the professor is not responsible for its content. The questions are based on the highlighted study guide but may contain errors. Please use it at your own discretion, as one learning tool of many, and check anything important against the official study guide and class materials.</p>';
+    h += resumeCard();
     SECS.forEach((sc, si) => {
       if(sc.key === 'Review') return;
       const sets = DATA.filter(z => z.sec === sc.key);
@@ -626,10 +617,6 @@ function renderMenu(){
       '<button class="tile" data-act="settings"><span class="ic">' + ICON_SLIDERS + '</span><span class="t">Customize</span><span class="s">Theme, text size, shuffle</span></button>' +
       '<button class="tile" data-act="suggest"><span class="ic">' + ICON_CHAT + '</span><span class="t">Suggestions</span><span class="s">Report a problem or idea</span></button>' +
       '</div>';
-    if(SG.owner){
-      h += '<button class="card" data-act="inbox"><span class="num">📥</span><span><div class="t">Suggestions inbox</div><div class="s">Only you can see this</div></span>' +
-        (SG.count != null ? '<span class="chip">' + SG.count + ' open</span>' : '') + '</button>';
-    }
     h += '<p class="fine" id="secret">Formats: Maps · True / False · Not correctly related · Which is FALSE · Matching · Fill in</p>';
     h += '<p class="fine" style="margin-top:4px">Updated ' + APP_UPDATED_LABEL + ' · v' + APP_VERSION_LABEL + '</p>';
   } else {
@@ -640,6 +627,7 @@ function renderMenu(){
       '<h1 class="secpg">' + sc.name + '</h1>' +
       '<p class="sub">' + esc(sc.pages) + ' · ' + sets.length + ' practice sets · ' + (qn ? qn + ' questions' : 'coming soon') + '</p>' +
       '<div class="menu-note">' + sc.note + '</div>';
+    h += resumeCard(sc.key);
     const mk = missedKeys(sc.key).length;
     if(mk) h += '<button class="card" data-act="missed" data-s="' + SECI + '"><span class="num sm">R</span><span><div class="t">Missed questions</div><div class="s">Only the ones you got wrong in ' + esc(sc.name) + '</div><div class="m">Leaves the list after you get it right twice</div></span><span class="chip">' + mk + '</span></button>' +
       '<div style="text-align:right;margin:-6px 0 6px"><button class="link" data-act="missedreset" data-s="' + SECI + '">Reset missed questions</button></div>';
@@ -668,8 +656,54 @@ function renderMenu(){
 function startQuiz(i, only){
   const si = SECS.findIndex(sc => sc.key === DATA[i].sec);
   if(si >= 0) SECI = si;   /* the missed-questions review is not a section of its own: stay in the one it was opened from */
-  S = {qi:i, order: only || ((SHUF || DATA[i].shuf || DATA[i].sec === 'Maps · country map key' || DATA[i].sec === 'Review') ? shuffled(DATA[i].qs.length) : DATA[i].qs.map((_, k) => k)), pos:0, res:{}, given:{}, oo:{}, full: !only, fb:null};
+  const mix = SHUF || DATA[i].shuf || DATA[i].sec === 'Review' || (si >= 0 && SECS[si].shuffle);
+  S = {qi:i, order: only || (mix ? shuffled(DATA[i].qs.length) : DATA[i].qs.map((_, k) => k)), pos:0, res:{}, given:{}, oo:{}, full: !only, fb:null};
+  saveRun();
   renderQ();
+}
+function showRun(){ if(S.pos >= S.order.length) renderResults(); else renderQ(); }
+
+/* ---------- KEEP YOUR PLACE ----------
+   The set in progress is saved on this device after every answer, so a refresh, a closed tab or "Update now" does not
+   start it over. Questions are remembered by their permanent key, so the saved place survives an update that moves them. */
+const RK = 'wh1_run_v1';
+function saveRun(){
+  try{
+    const z = DATA[S.qi]; if(!z || !S.order.length) return;
+    const byKey = o => { const r = {}; Object.keys(o || {}).forEach(i => { r[z.qs[i].k] = o[i]; }); return r; };
+    const run = {id: z.id, keys: S.order.map(i => z.qs[i].k), pos: S.pos, res: byKey(S.res), given: byKey(S.given), oo: byKey(S.oo), full: S.full, fb: S.fb};
+    if(z._sec){ run.sec = z._sec; run.all = z.qs.map(q => q.k); }
+    localStorage.setItem(RK, JSON.stringify(run));
+  }catch(e){}
+}
+function readRun(){ try{ const r = JSON.parse(localStorage.getItem(RK) || 'null'); return r && Array.isArray(r.keys) && r.keys.length ? r : null; }catch(e){ return null; } }
+function clearRun(){ try{ localStorage.removeItem(RK); }catch(e){} }
+/* The saved set, ready to carry on with: {S, si}. Null when there is none, or its questions are no longer there. */
+function loadRun(){
+  try{
+    const r = readRun(); if(!r) return null;
+    let qi, si;
+    if(r.id === 'M'){ si = SECS.findIndex(sc => sc.key === r.sec); qi = reviewSet(si, r.all || r.keys); }
+    else { qi = DATA.findIndex(z => String(z.id) === String(r.id) && z.sec !== 'Review'); si = qi < 0 ? -1 : SECS.findIndex(sc => sc.key === DATA[qi].sec); }
+    if(qi < 0 || si < 0) return null;
+    const z = DATA[qi], at = {};
+    z.qs.forEach((q, i) => { at[q.k] = i; });
+    if(r.keys.some(k => !(k in at))) return null;
+    const byPos = o => { const out = {}; Object.keys(o || {}).forEach(k => { if(k in at) out[at[k]] = o[k]; }); return out; };
+    const oo = byPos(r.oo);
+    Object.keys(oo).forEach(i => { const q = z.qs[i], v = oo[i]; if(!q.o || !Array.isArray(v) || v.length !== q.o.length || v.slice().sort((a, b) => a - b).some((x, n) => x !== n)) delete oo[i]; });
+    const pos = Math.max(0, Math.min(Number(r.pos) || 0, r.keys.length));
+    return {si, S: {qi, order: r.keys.map(k => at[k]), pos, res: byPos(r.res), given: byPos(r.given), oo, full: !!r.full, fb: pos < r.keys.length && r.fb ? r.fb : null}};
+  }catch(e){ return null; }
+}
+/* The "Continue" card on the menu: shown once a set has been started and is not finished yet. */
+function resumeCard(secKey){
+  const r = readRun(); if(!r || r.pos >= r.keys.length || !(r.pos > 0 || r.fb)) return '';
+  const z = r.id === 'M' ? null : DATA.find(d => String(d.id) === String(r.id) && d.sec !== 'Review');
+  const sec = z ? z.sec : r.sec, sc = SECS.find(x => x.key === sec);
+  if((r.id !== 'M' && !z) || !sc || (secKey && sec !== secKey)) return '';
+  return '<button class="card" data-act="resume" style="border-color:var(--accent)"><span class="num sm">▶</span><span><div class="t">Continue ' + (z ? esc(z.title) : 'missed questions') + '</div>' +
+    '<div class="s">' + (secKey ? '' : sc.name + ' · ') + 'Pick up where you left off</div></span><span class="chip">' + (r.pos + 1) + ' / ' + r.keys.length + '</span></button>';
 }
 /* Answer choices are shown in a new order on every run, so a retake can't be passed by remembering "it was C".
    The last choice ("All of the above...", "None of the above...") always stays last. */
@@ -733,6 +767,7 @@ function answer(given){
   S.given[idx] = given;
   trackMissed(q, ok);
   S.fb = {ok, given};
+  saveRun();
   renderQ();
 }
 
@@ -786,138 +821,6 @@ function renderResults(){
   window.scrollTo(0, 0);
 }
 
-/* ---------- REVIEWER (hidden: tap the "Formats" line 5 times, or add #review) ---------- */
-const RV_KEY = 'whrev1';
-let RV = {f:'qe', hf:false, only:'all', pos:0, list:[], flagOut:''};
-function rvLoad(){ try{ return JSON.parse(localStorage.getItem(RV_KEY) || '{}') || {}; }catch(e){ return {}; } }
-let RVM = rvLoad();
-function rvSave(){ try{ localStorage.setItem(RV_KEY, JSON.stringify(RVM)); }catch(e){} }
-function rvKey(z, k){ return z.qs[k].k; }
-/* One-time carry-over: older versions stored marks as "set id.question number". */
-(function(){
-  let changed = false;
-  Object.keys(RVM).forEach(key => {
-    const p = /^(\d+)\.(\d+)$/.exec(key); if(!p) return;
-    const z = DATA.find(d => String(d.id) === p[1]), q = z && z.qs[+p[2] - 1];
-    if(q && !RVM[q.k]) RVM[q.k] = RVM[key];
-    delete RVM[key]; changed = true;
-  });
-  if(changed) rvSave();
-})();
-function rvInScope(z){
-  if(z.sec === 'Review') return false;
-  if(RV.f === 'qe') return Number(z.id) >= 6 && Number(z.id) <= 14;
-  if(RV.f === 'q1') return Number(z.id) >= 29 && Number(z.id) <= 32;
-  if(RV.f === 'all') return true;
-  return String(z.id) === RV.f;
-}
-function rvBuild(){
-  const L = [];
-  DATA.forEach((z, i) => {
-    if(!rvInScope(z)) return;
-    z.qs.forEach((q, k) => {
-      if(RV.hf && q.t === 'fill') return;
-      const m = RVM[rvKey(z, k)] || {};
-      if(RV.only === 'flag' && !m.f) return;
-      if(RV.only === 'todo' && m.c) return;
-      L.push({i:i, k:k});
-    });
-  });
-  RV.list = L;
-  if(RV.pos >= L.length) RV.pos = Math.max(0, L.length - 1);
-}
-function renderSecret(){
-  VIEW = 'secret'; FROM_SECRET = true;
-  app.innerHTML = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Owner tools</div></div>' +
-    '<button class="card" data-rv="open"><span class="num">🔍</span><span><div class="t">Reviewer</div><div class="s">Step through every question with the answer and guide line, flag or mark as checked</div></span></button>' +
-    '<button class="card" data-act="inbox"><span class="num">📥</span><span><div class="t">Suggestions inbox</div><div class="s">Only you can see this</div></span></button>' +
-    '<button class="card" data-act="stats"><span class="num">📊</span><span><div class="t">Site stats</div><div class="s">Visitors, and which sections and sets people open</div></span></button>';
-  window.scrollTo(0, 0);
-}
-function renderReviewer(){
-  VIEW = 'rev'; rvBuild();
-  const L = RV.list, n = L.length;
-  let all = 0, chk = 0, flg = 0;
-  DATA.forEach(z => { if(!rvInScope(z)) return; z.qs.forEach((q, k) => { all++; const m = RVM[rvKey(z, k)] || {}; if(m.c) chk++; if(m.f) flg++; }); });
-  let h = '<div class="top"><button class="btn" data-rv="exit">' + (FROM_SECRET ? '← Owner tools' : '← Menu') + '</button><div class="ttl">Reviewer</div><div class="cnt">' + (n ? RV.pos + 1 : 0) + ' / ' + n + '</div></div>';
-  h += '<div class="rvbox"><label>Show <select id="rvf"><option value="qe"' + (RV.f === 'qe' ? ' selected' : '') + '>Quiz 2 + Exam 2 (all)</option><option value="q1"' + (RV.f === 'q1' ? ' selected' : '') + '>Quiz 1 (all)</option><option value="all"' + (RV.f === 'all' ? ' selected' : '') + '>Every set</option>' +
-    DATA.filter(z => z.sec !== 'Review' && !z.soon).map(z => '<option value="' + z.id + '"' + (RV.f === String(z.id) ? ' selected' : '') + '>' + esc(z.lab || z.title) + '</option>').join('') + '</select></label>' +
-    '<label>Filter <select id="rvo"><option value="all"' + (RV.only === 'all' ? ' selected' : '') + '>All questions</option><option value="todo"' + (RV.only === 'todo' ? ' selected' : '') + '>Not yet checked</option><option value="flag"' + (RV.only === 'flag' ? ' selected' : '') + '>Flagged only</option></select></label>' +
-    '<label class="rvck"><input type="checkbox" id="rvhf"' + (RV.hf ? ' checked' : '') + '> Skip fill-in (date) questions</label>' +
-    '<div class="rvgo"><label>Go to # <input id="rvn" type="number" min="1" max="' + Math.max(1, n) + '" value="' + (n ? RV.pos + 1 : '') + '" inputmode="numeric"></label><button class="btn" data-rv="go">Go</button></div>' +
-    '<div class="rvst">' + chk + ' checked · ' + flg + ' flagged · ' + all + ' total in this scope</div></div>';
-  if(!n){
-    h += '<div class="menu-note">No questions match this filter.</div>';
-  } else {
-    const e = L[RV.pos], z = DATA[e.i], q = z.qs[e.k], m = RVM[rvKey(z, e.k)] || {};
-    h += '<div class="rvnav"><button class="btn" data-rv="m10">« 10</button><button class="btn" data-rv="prev">‹ Prev</button><button class="btn primary" data-rv="next">Next ›</button><button class="btn" data-rv="p10">10 »</button></div>';
-    h += '<div class="qcard"><span class="tag">' + esc(z.lab || z.title) + ' · Q' + (e.k + 1) + ' · ' + esc(q.s) + '</span><p class="q">' + esc(q.q) + '</p>';
-    if(q.img) h += mapImg(q.img, 'Map');
-    if(q.items) h += '<div class="items">' + q.items.map(t => '<div>' + esc(t) + '</div>').join('') + '</div>';
-    if(q.t === 'tf'){
-      h += '<div class="tf2">' + [true, false].map(v => '<div class="opt tfb' + (v === q.a ? ' ok' : '') + '">' + (v ? 'True' : 'False') + '</div>').join('') + '</div>';
-    } else if(q.t === 'mc'){
-      h += '<div class="opts">' + q.o.map((o, k) => '<div class="opt' + (k === q.a ? ' ok' : '') + '"><span class="l">' + 'ABCDE'[k] + '</span><span>' + esc(o) + '</span></div>').join('') + '</div>';
-    }
-    h += '<div class="fb ok"><b>Answer</b><div class="ans">' + esc(ansText(q)) + '</div></div>' +
-      whyHtml(q, null, 'Guide line') +
-      '<div class="rvact"><button class="btn' + (m.c ? ' primary' : '') + '" data-rv="chk">' + (m.c ? '✓ Checked' : 'Mark checked') + '</button>' +
-      '<button class="btn' + (m.f ? ' primary' : '') + '" data-rv="flag">' + (m.f ? '⚑ Flagged' : '⚑ Flag') + '</button>' +
-      '<button class="btn" data-rv="nextTodo">Next unchecked »</button></div>' +
-      '<textarea id="rvnote" class="rvnote" rows="2" placeholder="Note (optional)">' + esc(m.n || '') + '</textarea></div>';
-  }
-  h += '<div class="rvfoot"><button class="btn" data-rv="list">Show flagged list</button><button class="btn" data-rv="clear">Clear my marks</button></div>';
-  if(RV.flagOut) h += '<textarea id="rvout" class="rvnote" rows="8" readonly>' + esc(RV.flagOut) + '</textarea>';
-  app.innerHTML = h;
-}
-function rvCur(){ const e = RV.list[RV.pos]; return e ? {z:DATA[e.i], k:e.k} : null; }
-function rvSaveNote(){ const t = document.getElementById('rvnote'), c = rvCur(); if(t && c){ const key = rvKey(c.z, c.k); const m = RVM[key] = RVM[key] || {}; m.n = t.value; if(!m.n && !m.c && !m.f) delete RVM[key]; rvSave(); } }
-function rvMove(d){ rvSaveNote(); RV.pos = Math.min(Math.max(0, RV.pos + d), Math.max(0, RV.list.length - 1)); renderReviewer(); window.scrollTo(0, 0); }
-function rvFlagList(){
-  const out = [];
-  DATA.forEach(z => z.qs.forEach((q, k) => { const m = RVM[rvKey(z, k)]; if(m && m.f) out.push((z.lab || z.title) + ' Q' + (k + 1) + ': ' + q.q + (m.n ? '  [note: ' + m.n + ']' : '')); }));
-  return out.join('\n\n') || 'Nothing flagged yet.';
-}
-app.addEventListener('click', e => {
-  const b = e.target.closest('[data-rv]'); if(!b) return;
-  const a = b.dataset.rv;
-  if(a === 'open'){ renderReviewer(); window.scrollTo(0, 0); return; }
-  if(a === 'exit'){ rvSaveNote(); if(FROM_SECRET) renderSecret(); else renderMenu(); window.scrollTo(0, 0); return; }
-  if(a === 'next') return rvMove(1);
-  if(a === 'prev') return rvMove(-1);
-  if(a === 'p10') return rvMove(10);
-  if(a === 'm10') return rvMove(-10);
-  if(a === 'go'){ const v = parseInt((document.getElementById('rvn') || {}).value, 10); if(v >= 1) { rvSaveNote(); RV.pos = Math.min(v, RV.list.length) - 1; renderReviewer(); window.scrollTo(0, 0); } return; }
-  if(a === 'chk' || a === 'flag'){
-    rvSaveNote(); const c = rvCur(); if(!c) return;
-    const key = rvKey(c.z, c.k); const m = RVM[key] = RVM[key] || {};
-    if(a === 'chk') m.c = m.c ? 0 : 1; else m.f = m.f ? 0 : 1;
-    if(!m.c && !m.f && !m.n) delete RVM[key];
-    rvSave(); renderReviewer(); return;
-  }
-  if(a === 'nextTodo'){
-    rvSaveNote(); const L = RV.list;
-    for(let s = 1; s <= L.length; s++){ const p = (RV.pos + s) % L.length; const m = RVM[rvKey(DATA[L[p].i], L[p].k)] || {}; if(!m.c){ RV.pos = p; break; } }
-    renderReviewer(); window.scrollTo(0, 0); return;
-  }
-  if(a === 'list'){ rvSaveNote(); RV.flagOut = rvFlagList(); renderReviewer(); try{ if(navigator.clipboard) navigator.clipboard.writeText(RV.flagOut).catch(function(){}); }catch(er){} return; }
-  if(a === 'clear'){ if(window.confirm && !window.confirm('Clear all your checked/flagged marks and notes on this device?')) return; RVM = {}; rvSave(); RV.flagOut = ''; renderReviewer(); return; }
-});
-app.addEventListener('change', e => {
-  const t = e.target; if(!t || VIEW !== 'rev') return;
-  if(t.id === 'rvf'){ rvSaveNote(); RV.f = t.value; RV.pos = 0; renderReviewer(); }
-  else if(t.id === 'rvo'){ rvSaveNote(); RV.only = t.value; RV.pos = 0; renderReviewer(); }
-  else if(t.id === 'rvhf'){ rvSaveNote(); RV.hf = t.checked; RV.pos = 0; renderReviewer(); }
-  else if(t.id === 'rvnote') rvSaveNote();
-});
-document.addEventListener('keydown', e => {
-  if(VIEW !== 'rev') return; const tg = (e.target && e.target.tagName) || '';
-  if(tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return;
-  if(e.key === 'ArrowRight') rvMove(1); else if(e.key === 'ArrowLeft') rvMove(-1);
-});
-if(location.hash === '#review') renderReviewer();
-window.addEventListener('hashchange', () => { if(location.hash === '#review') renderReviewer(); });
-
 /* Enter key: after you answer, Enter goes to the next question */
 document.addEventListener('keydown', e => {
   if(e.key !== 'Enter' || e.repeat || VIEW !== 'q' || !S.fb) return;
@@ -948,7 +851,7 @@ let tapN = 0, tapT = 0;
 app.addEventListener('click', e => {
   if(e.target && e.target.id === 'secret'){
     const now = Date.now(); tapN = (now - tapT < 2000) ? tapN + 1 : 1; tapT = now;
-    if(tapN >= 5){ tapN = 0; renderSecret(); }
+    if(tapN >= 5){ tapN = 0; openOwner('secret', true); }
     return;
   }
   const b = e.target.closest('[data-act]');
@@ -956,52 +859,43 @@ app.addEventListener('click', e => {
   const a = b.dataset.act;
   /* When a tap redraws the screen, the button that had keyboard focus is gone. Move focus to the new screen's heading. */
   setTimeout(() => { if(VIEW !== 'q' && !app.contains(document.activeElement)) focusHead(); }, 0);
-  if(a === 'settings'){ SET_FROM = (VIEW === 'q') ? 'q' : 'menu'; renderSettings(); window.scrollTo(0, 0); }
-  else if(a === 'setback'){ if(SET_FROM === 'q' && S.order.length) renderQ(); else renderMenu(); }
+  if(a === 'settings'){ SET_FROM = (VIEW === 'q') ? 'q' : 'menu'; hpush('settings', {from: SET_FROM}); renderSettings(); window.scrollTo(0, 0); }
+  else if(a === 'setback') hback(renderMenu);
   else if(a === 'pref') setPref(b.dataset.pk, b.dataset.pv);
   else if(a === 'prefreset'){ PREF = Object.assign({}, DEF); savePrefs(); setShuf(false); applyPrefs(); renderSettings(); }
-  else if(a === 'start'){ gcSet(DATA[+b.dataset.i]); startQuiz(+b.dataset.i); }
+  else if(a === 'start'){ gcSet(DATA[+b.dataset.i]); startQuiz(+b.dataset.i); hpush('quiz', {s: SECI}); }
+  else if(a === 'resume'){
+    const r = loadRun();
+    if(!r){ clearRun(); renderMenu(); return; }
+    S = r.S;
+    if(SECI !== r.si){ SECI = r.si; hpush('sec', {s: SECI}); }   /* opened from the front page: Back goes to the set list first */
+    hpush('quiz', {s: SECI}); showRun();
+  }
   else if(a === 'missedreset'){ const sc = SECS[+b.dataset.s]; if(!sc) return; if(window.confirm && !window.confirm('Reset the missed questions list for ' + sc.name.replace(/&amp;/g, '&') + '?')) return; clearMissed(sc.key); renderMenu(); }
   else if(a === 'missedresetall'){ if(window.confirm && !window.confirm('Reset the missed questions list for every section?')) return; clearMissed(); renderSettings(); }
-  else if(a === 'missed'){ gcMissed(+b.dataset.s); startMissed(+b.dataset.s); }
-  else if(a === 'menu') renderMenu();
-  else if(a === 'ownerback') renderSecret();
-  else if(a === 'home'){ SECI = -1; renderMenu(); }
-  else if(a === 'sec'){ SECI = +b.dataset.s; gcSec(SECI); renderMenu(); }
+  else if(a === 'missed'){ gcMissed(+b.dataset.s); if(startMissed(+b.dataset.s)) hpush('quiz', {s: SECI}); }
+  else if(a === 'menu') hback(renderMenu);
+  else if(a === 'home') hback(() => { SECI = -1; renderMenu(); });
+  else if(a === 'sec'){ SECI = +b.dataset.s; gcSec(SECI); hpush('sec', {s: SECI}); renderMenu(); }
   else if(a === 'tf') answer(b.dataset.v === 'true');
   else if(a === 'mc') answer(+b.dataset.k);
   else if(a === 'fill'){ const v = document.getElementById('fi').value; if(v.trim()) answer(v); }
   else if(a === 'next'){
     S.fb = null; S.pos++;
-    if(S.pos >= S.order.length) renderResults(); else renderQ();
+    saveRun(); showRun();
   }
   else if(a === 'retry') startQuiz(S.qi, S.order.filter(i => !S.res[i]));
   else if(a === 'retake') startQuiz(S.qi);
   else if(a === 'nextquiz'){ gcSet(DATA[S.qi + 1]); startQuiz(S.qi + 1); }
-  else if(a === 'suggest') renderSuggest(null, 'menu');
+  else if(a === 'suggest'){ hpush('sug', {ret: 'menu'}); renderSuggest(null, 'menu'); }
   else if(a === 'report'){
     const z = DATA[S.qi], idx = S.order[S.pos], q = z.qs[idx];
+    hpush('sug', {ret: 'q'});
     renderSuggest({exam: z.lab, qn: idx + 1, q: q.q.slice(0, 220)}, 'q');
   }
-  else if(a === 'sugback'){ if(RET === 'q' && S.order.length) renderQ(); else renderMenu(); }
+  else if(a === 'sugback') hback(renderMenu);
   else if(a === 'sugsend') sendSuggestion();
   else if(a === 'sugcopy') copySuggestion();
-  else if(a === 'inbox') renderInbox();
-  else if(a === 'stats') renderStats();
-  else if(a === 'gcser'){ if(gcSetShow(b.dataset.k, b.checked)){ if(GC_CHART) gcDrawChart(GC_CHART.s); } else b.checked = true; }
-  else if(a === 'gcview'){ gcSetView(b.dataset.v); renderStats(); }
-  else if(a === 'gcrange'){ gcSetRange(b.dataset.r); renderStats(); }
-  else if(a === 'gckeysave'){ const el = document.getElementById('gc-key'); const k = el ? el.value.trim() : ''; if(k){ gcSetKey(k); renderStats(); } else if(el) el.focus(); }
-  else if(a === 'gckeydel'){ gcSetKey(''); renderStats(); }
-  else if(a === 'sugdiag') relayDiag();
-  else if(a === 'sugcopyall'){
-    copyText((SG.items || []).filter(i => !i.done).map(itemAsText).join('\n\n')).then(ok => setStatus(ok ? 'Copied all open suggestions.' : 'Couldn’t copy automatically.', ok ? 'good' : 'bad'));
-  }
-  else if(a === 'sugdone'){ b.disabled = true; editInboxItem(b, 'done').then(renderInbox, renderInbox); }
-  else if(a === 'sugdel'){
-    if(b.dataset.arm !== '1'){ b.dataset.arm = '1'; b.textContent = 'Tap again to delete'; return; }
-    b.disabled = true; editInboxItem(b, 'del').then(renderInbox, renderInbox);
-  }
 });
 app.addEventListener('keydown', e => {
   if(e.key === 'Enter' && e.target && e.target.id === 'fi'){
@@ -1011,12 +905,7 @@ app.addEventListener('keydown', e => {
 
 /* ---------- SUGGESTIONS ---------- */
 const RELAY = 'https://ntfy.sh';
-const ARCH = 'wh1_sugg_v1';
-function loadArch(){ try{ const a = JSON.parse(localStorage.getItem(ARCH) || '{}'); return {items: a.items || {}, deleted: a.deleted || {}}; }catch(e){ return {items:{}, deleted:{}}; } }
-function saveArch(a){ try{ localStorage.setItem(ARCH, JSON.stringify(a)); }catch(e){} }
-function dbReady(){ return !!(SG.db && SG.user) && SG.canWrite !== false; }
-function canSubmit(){ return !!(SUGGEST.relayTopic || SUGGEST.endpoint) || dbReady(); }
-function fmtDate(t){ try{ return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' ' + new Date(t).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+function canSubmit(){ return !!(SUGGEST.relayTopic || SUGGEST.endpoint); }
 function setStatus(msg, cls){ const el = document.getElementById('sg-status'); if(el){ el.textContent = msg || ''; el.className = 'status ' + (cls || ''); } }
 function ctxLabel(c){ return c ? (typeof c.exam === 'number' ? 'Exam ' + c.exam : c.exam) + ' · Question ' + c.qn : ''; }
 function titleOf(it){ return it.title || (it.cat + (it.ctx ? ' · ' + ctxLabel(it.ctx) : '') + (it.name ? ' · ' + it.name : '')); }
@@ -1066,35 +955,6 @@ async function relayPublish(item){
   const res = await fetch(RELAY, {method: 'POST', body: JSON.stringify(body)});
   if(!res.ok) throw {code: 'relay', message: 'HTTP ' + res.status};
 }
-async function relayFetch(){
-  const res = await fetch(RELAY + '/' + encodeURIComponent(SUGGEST.relayTopic) + '/json?poll=1&since=all');
-  if(!res.ok) throw {code: 'relay', message: 'HTTP ' + res.status};
-  const out = [];
-  (await res.text()).split('\n').forEach(l => {
-    l = l.trim(); if(!l) return;
-    try{ const e = JSON.parse(l); if(e.event === 'message') out.push({id: 'n_' + e.id, t: (e.time || 0) * 1000, title: e.title || 'Suggestion', text: e.message || '', done: false}); }catch(x){}
-  });
-  return out;
-}
-async function relayDiag(){
-  const out = [];
-  const show = () => { const el = document.getElementById('sg-diag'); if(el) el.textContent = out.join('\n'); };
-  out.push('Page address: ' + location.href); out.push('Topic: ' + SUGGEST.relayTopic); show();
-  try{
-    const r = await fetch(RELAY, {method: 'POST', body: JSON.stringify({topic: SUGGEST.relayTopic, title: 'Connection test', tags: ['white_check_mark'], message: 'Test from the exam page at ' + new Date().toLocaleString()})});
-    out.push('Send test: ' + (r.ok ? 'OK' : 'FAILED') + ' (HTTP ' + r.status + ')');
-  }catch(e){
-    out.push('Send test: BLOCKED (' + ((e && e.message) || e) + '). The browser could not reach ntfy.sh from this page. Usual causes: the host or a content blocker prevents outside requests, or this page is running inside claude.ai, which blocks them.');
-  }
-  show();
-  try{
-    const items = await relayFetch();
-    out.push('Read test: OK, ' + items.length + ' message(s) currently on the relay');
-  }catch(e){
-    out.push('Read test: FAILED (' + ((e && e.message) || e) + ')');
-  }
-  show();
-}
 async function postToEndpoint(item){
   const where = item.ctx ? ctxLabel(item.ctx) : 'General';
   const body = {
@@ -1109,15 +969,6 @@ async function postToEndpoint(item){
   let j = null; try{ j = await res.json(); }catch(e){}
   if(!res.ok || (j && (j.success === false || j.ok === false))) throw {code: 'endpoint', message: (j && j.message) || ('HTTP ' + res.status)};
 }
-async function dbSubmit(item){
-  const uid = await SG.user.id();
-  if(!uid) throw {code: 'noid'};
-  const ref = SG.db.doc('suggestions/' + uid);
-  let cur = [];
-  try{ const sn = await ref.get(); if(sn.exists) cur = ((sn.data() || {}).items || []).slice(); }catch(e){}
-  cur.push(item); if(cur.length > 50) cur = cur.slice(-50);
-  await ref.set({items: cur});
-}
 async function sendSuggestion(){
   const item = buildItem(); if(!item) return;
   const hp = document.getElementById('sg-hp');
@@ -1131,9 +982,6 @@ async function sendSuggestion(){
   if(jobs.length){
     const r = await Promise.allSettled(jobs); sent = r.some(x => x.status === 'fulfilled');
     const bad = r.find(x => x.status === 'rejected'); if(bad) why = String((bad.reason && bad.reason.message) || bad.reason || '');
-  }
-  if(!sent && dbReady()){
-    try{ await dbSubmit(item); sent = true; }catch(e){ if(e && e.code === 'invalid_argument') SG.canWrite = false; }
   }
   if(sent){ thanksScreen(); return; }
   renderSuggestKeep(item, 'Couldn’t send that just now' + (why ? ' (' + why + ')' : '') + '. Try again, or use “Copy note instead.”');
@@ -1156,75 +1004,6 @@ async function copySuggestion(){
   setStatus(ok ? 'Copied. Paste it into a message to send it.' : 'Couldn’t copy automatically. Select your note and copy it.', ok ? 'good' : 'bad');
 }
 
-/* ---------- INBOX (hidden on a self-hosted page; a menu button on claude.ai) ---------- */
-async function loadDbInbox(){
-  const snap = await SG.db.collection('suggestions').get();
-  const all = [];
-  snap.docs.forEach(d => { (((d.data() || {}).items) || []).forEach(it => all.push(Object.assign({}, it, {uid: d.id, src: 'db'}))); });
-  return all;
-}
-async function renderInbox(){
-  VIEW = 'inb';
-  const head = '<div class="top">' + ownerBackBtn() + '<div class="ttl">Suggestions inbox</div></div>';
-  app.innerHTML = head + '<div class="note">Loading…</div>';
-  const notes = [];
-  const arch = loadArch();
-  if(SUGGEST.relayTopic){
-    try{
-      (await relayFetch()).forEach(it => { if(!arch.deleted[it.id] && !arch.items[it.id]) arch.items[it.id] = it; });
-      saveArch(arch);
-    }catch(e){ notes.push('Couldn’t reach the relay just now (' + ((e && e.message) || e) + '). Showing what’s already saved on this device. Tap “Test connection” for details.'); }
-  }
-  let items = Object.keys(arch.items).filter(id => !arch.deleted[id]).map(id => Object.assign({}, arch.items[id], {src: 'local'}));
-  if(SG.owner && SG.db){ try{ items = items.concat(await loadDbInbox()); }catch(e){} }
-  items.sort((a, b) => b.t - a.t);
-  SG.items = items; SG.count = items.filter(i => !i.done).length;
-  if(VIEW !== 'inb') return;
-  const open = items.filter(i => !i.done), done = items.filter(i => i.done);
-  const card = it => '<div class="inb' + (it.done ? ' done' : '') + '"><div class="meta"><span>' + esc(fmtDate(it.t)) + '</span><b>' + esc(titleOf(it)) + '</b></div>' +
-    '<div class="txt">' + esc(it.text) + '</div>' + (it.ctx ? '<div class="cq">' + esc(it.ctx.q) + '</div>' : '') +
-    '<div class="row"><button class="btn" data-act="sugdone" data-src="' + it.src + '" data-uid="' + esc(it.uid || '') + '" data-id="' + esc(it.id) + '">' + (it.done ? 'Reopen' : 'Mark done') + '</button>' +
-    '<button class="btn" data-act="sugdel" data-src="' + it.src + '" data-uid="' + esc(it.uid || '') + '" data-id="' + esc(it.id) + '">Delete</button></div></div>';
-  let h = head.replace('</div></div>', '</div><div class="cnt">' + open.length + ' open</div></div>') +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="inbox">Refresh</button>' + (SUGGEST.relayTopic ? '<button class="btn" data-act="sugdiag">Test connection</button>' : '') + (open.length ? '<button class="btn" data-act="sugcopyall">Copy all open</button>' : '') + '</div>' +
-    '<div id="sg-status" class="status" role="status"></div>';
-  if(SUGGEST.relayTopic) h += '<p class="note" style="margin-top:0">The relay keeps messages for about 12 hours. Each time you open this inbox, new ones are saved on this device.</p>';
-  notes.forEach(n => { h += '<p class="note" style="color:var(--bad)">' + esc(n) + '</p>'; });
-  h += '<pre id="sg-diag" style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:8px 0 0"></pre>';
-  if(!items.length) h += '<div class="menu-note">No suggestions yet.</div>';
-  h += open.map(card).join('');
-  if(done.length) h += '<h3 style="margin-top:20px;font-size:16px;color:var(--muted)">Done (' + done.length + ')</h3>' + done.map(card).join('');
-  app.innerHTML = h; window.scrollTo(0, 0);
-}
-async function editInboxItem(b, kind){
-  const id = b.dataset.id;
-  if(b.dataset.src === 'db'){
-    const ref = SG.db.doc('suggestions/' + b.dataset.uid);
-    const sn = await ref.get();
-    let its = ((sn.exists && sn.data().items) || []).slice();
-    its = kind === 'del' ? its.filter(it => it.id !== id) : its.map(it => it.id === id ? Object.assign({}, it, {done: !it.done}) : it);
-    await ref.set({items: its});
-  } else {
-    const arch = loadArch();
-    if(kind === 'del'){ delete arch.items[id]; arch.deleted[id] = 1; }
-    else if(arch.items[id]){ arch.items[id].done = !arch.items[id].done; }
-    saveArch(arch);
-  }
-}
-async function initSuggest(){
-  try{
-    if(typeof claude === 'undefined' || !claude || !claude.use) return;
-    const got = await Promise.all([claude.use('db'), claude.use('user')]);
-    SG.db = got[0]; SG.user = got[1];
-    if(SG.user){
-      try{ SG.owner = await SG.user.isOwner(); }catch(e){}
-      try{ SG.canWrite = await SG.user.can('data.write'); }catch(e){}
-    }
-    if(SG.owner && SG.db){ try{ SG.count = (await loadDbInbox()).filter(i => !i.done).length; }catch(e){} }
-    if(VIEW === 'menu') renderMenu();
-  }catch(e){}
-}
-
 /* ---------- SITE STATS (GoatCounter; hidden: Owner tools, or add #stats) ----------
    Page views are counted by the GoatCounter script in <head>. Opening a section or
    starting a practice set is also sent as an event, so the stats page can show which
@@ -1243,306 +1022,66 @@ function gcMissPath(sc){ return 'missed-' + gcSlug(sc.name); }
 function gcSec(si){ const sc = SECS[si]; if(sc && sc.key !== 'Review') gcEvent(gcSecPath(sc), 'Opened section: ' + sc.name.replace(/&amp;/g, '&')); }
 function gcSet(z){ if(z && z.sec !== 'Review') gcEvent(gcSetPath(z), 'Started set: ' + z.lab); }
 function gcMissed(si){ const sc = SECS[si]; if(sc) gcEvent(gcMissPath(sc), 'Started missed questions: ' + sc.name.replace(/&amp;/g, '&')); }
-/* Time ranges. GoatCounter's public counter only understands whole days (start=YYYY-MM-DD,
-   midnight UTC), so "last 24 hours" needs GoatCounter's API, which needs an
-   API key. The key is pasted on the stats page and kept only in this browser's storage. It is
-   never part of the page source. With a key, every range except "all time" uses the API
-   (hourly precision). Without one, 7 and 30 days use the public counter in whole UTC days. */
-const GC_RANGES = [['day', '24 hours', 'Last 24 hours'], ['week', '7 days', 'Last 7 days'], ['month', '30 days', 'Last 30 days'], ['all', 'All time', 'All time']];
-const GC_HOURS = {day: 24, week: 168, month: 720};
-let GC_RANGE = (() => { try{ const r = (localStorage.getItem('gc_range') || '').replace(/^hour$/, 'day'); return GC_RANGES.some(x => x[0] === r) ? r : 'all'; }catch(e){ return 'all'; } })();
-function gcSetRange(r){ GC_RANGE = r; try{ localStorage.setItem('gc_range', r); }catch(e){} }
-function gcKey(){ try{ return localStorage.getItem('gc_api_key') || ''; }catch(e){ return ''; } }
-function gcSetKey(k){ try{ if(k) localStorage.setItem('gc_api_key', k); else localStorage.removeItem('gc_api_key'); }catch(e){} }
-/* Start of the range, rounded down to the hour (GoatCounter stores counts per hour). */
-function gcStartMs(r){ const H = 3600000; return Math.floor((Date.now() - GC_HOURS[r] * H) / H) * H; }
-function gcIso(ms){ return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z'); }
-/* GoatCounter caches each public counter for 4 hours, keyed on path + start + end, so a plain
-   request can return hours-old numbers. Each load sends a different far-future "end" date:
-   same count, new cache key, current numbers. */
-let GC_END = '';
-function gcFreshEnd(){ GC_END = new Date(Date.UTC(2100, 0, 1) + (Math.floor(Date.now() / 60000) % 9000) * 86400000).toISOString().slice(0, 10); }
-async function gcCount(path, start){
-  if(!GC_END) gcFreshEnd();
-  const res = await fetch(GC_SITE + '/counter/' + encodeURIComponent(path) + '.json?end=' + GC_END + (start ? '&start=' + start : ''), {cache: 'no-store'});
-  if(res.status === 404) return 0;
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  const j = await res.json();
-  return parseInt(String(j.count != null ? j.count : j.count_unique || '0').replace(/[^0-9]/g, ''), 10) || 0;
-}
-/* All paths with their visitor counts in the range, from the API: {path(lowercase): count}. */
-async function gcApiHits(r){
-  const out = {};
-  (await gcApiRaw(gcStartMs(r), Math.ceil(Date.now() / 3600000) * 3600000)).forEach(x => { out[String(x.path).toLowerCase()] = {n: x.count || 0, ev: !!x.event}; });
-  return out;
-}
-/* ---- Hourly graph (needs the API key) ----
-   GoatCounter returns, per path, a list of days with 24 hourly visitor counts. Those days
-   and hours are in the timezone set in GoatCounter, so the timeline is built in that zone
-   (read from /api/v0/me; falls back to this device's zone). */
-let GC_VIEWMODE = (() => { try{ return localStorage.getItem('gc_view') === 'graph' ? 'graph' : 'numbers'; }catch(e){ return 'numbers'; } })();
-function gcSetView(v){ GC_VIEWMODE = v; try{ localStorage.setItem('gc_view', v); }catch(e){} }
-let GC_TZ = '', GC_CHART = null;
-/* Which lines the graph shows (Visitors, Section & set opens); at least one stays on. */
-let GC_SHOW = (() => { try{ const o = JSON.parse(localStorage.getItem('gc_series') || '{}'); const v = o.v !== false, e = o.e !== false; return (v || e) ? {v, e} : {v: true, e: true}; }catch(err){ return {v: true, e: true}; } })();
-function gcSetShow(k, on){
-  const next = Object.assign({}, GC_SHOW, {[k]: on});
-  if(!next.v && !next.e) return false;
-  GC_SHOW = next; try{ localStorage.setItem('gc_series', JSON.stringify(GC_SHOW)); }catch(err){}
-  return true;
-}
-function gcDrawChart(s){
-  const slot = document.getElementById('gc-chart-slot');
-  if(!slot) return;
-  slot.innerHTML = gcChartSvg(s, Math.max(260, Math.round(slot.clientWidth || 340)));
-  const el = document.getElementById('gc-chart');
-  el.addEventListener('pointermove', gcChartHover);
-  el.addEventListener('pointerdown', gcChartHover);
-  el.addEventListener('pointerleave', gcChartLeave);
-}
-function gcTzOk(z){ try{ new Intl.DateTimeFormat('en', {timeZone: z}); return true; }catch(e){ return false; } }
-async function gcTz(){
-  if(GC_TZ) return GC_TZ;
-  let z = '';
-  try{
-    const res = await fetch(GC_SITE + '/api/v0/me', {headers: {'Authorization': 'Bearer ' + gcKey()}, cache: 'no-store'});
-    if(res.ok){
-      const j = await res.json(), t = j && j.user && j.user.settings && j.user.settings.timezone;
-      const m = String(typeof t === 'string' ? t : JSON.stringify(t || '')).match(/(?:[A-Za-z_]+\/[A-Za-z_+\-\/]+|UTC|Etc\/[A-Za-z0-9+\-]+)/);
-      if(m && gcTzOk(m[0])) z = m[0];
-    }
-  }catch(e){}
-  if(!z){ try{ z = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }catch(e){ z = 'UTC'; } }
-  return (GC_TZ = z);
-}
-/* "YYYY-MM-DD HH" for a UTC instant, in zone z. */
-function gcZoneKey(ms, z){
-  const p = {}; new Intl.DateTimeFormat('en-CA', {timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'}).formatToParts(new Date(ms)).forEach(x => { p[x.type] = x.value; });
-  return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour;
-}
-async function gcApiRaw(startMs, endMs){
-  const out = [], seen = [];
-  const base = GC_SITE + '/api/v0/stats/hits?limit=100&start=' + gcIso(startMs) + '&end=' + gcIso(endMs);
-  for(let page = 0; page < 10; page++){
-    const res = await fetch(base + (seen.length ? '&exclude_paths=' + seen.join(',') : ''), {headers: {'Authorization': 'Bearer ' + gcKey()}, cache: 'no-store'});
-    if(res.status === 401 || res.status === 403){ const e = new Error('GoatCounter didn’t accept the API key'); e.badKey = true; throw e; }
-    if(!res.ok) throw new Error('HTTP ' + res.status);
-    const j = await res.json();
-    (j.hits || []).forEach(x => { out.push(x); seen.push(x.path_id); });
-    if(!j.more || !(j.hits || []).length) break;
+/* ---------- OWNER TOOLS ----------
+   The reviewer, suggestions inbox and site stats are in owner.js, which is only fetched when one of them is opened:
+   tap the "Formats" line at the bottom of the menu 5 times, or add #review, #inbox or #stats to the page address. */
+const HASH_PAGES = {'#review': 'rev', '#inbox': 'inb', '#stats': 'stats'};
+let OWNER_JS = null;
+function openOwner(page, push){
+  if(!OWNER_JS){
+    if(!push) app.innerHTML = '<div class="note">Loading…</div>';
+    OWNER_JS = new Promise((ok, fail) => {
+      const s = document.createElement('script');
+      s.src = 'owner.js?v=' + APP_VERSION; s.onload = ok; s.onerror = fail;
+      document.head.appendChild(s);
+    });
   }
-  return out;
-}
-/* Points [{t: label ms, v: visitors, e: opens}] for the range. Hourly for up to 30 days;
-   "all time" is by day over the last 180 days (hourly would be thousands of points). */
-async function gcSeries(r){
-  const H = 3600000, now = Date.now(), endMs = Math.ceil(now / H) * H;
-  const daily = r === 'all', hours = GC_HOURS[r];
-  const startMs = daily ? Math.floor((now - 180 * 24 * H) / (24 * H)) * 24 * H : Math.floor((now - hours * H) / H) * H;
-  const [hits, z] = await Promise.all([gcApiRaw(startMs, endMs), gcTz()]);
-  const vis = {}, ev = {};
-  hits.forEach(x => (x.stats || []).forEach(s => {
-    const tgt = x.event ? ev : vis;
-    if(daily){ tgt[s.day] = (tgt[s.day] || 0) + (s.daily || 0); return; }
-    (s.hourly || []).forEach((n, h) => { if(n){ const k = s.day + ' ' + String(h).padStart(2, '0'); tgt[k] = (tgt[k] || 0) + n; } });
-  }));
-  const pts = [], step = daily ? 24 * H : H;
-  for(let t = daily ? startMs + 12 * H : startMs; t < endMs; t += step){
-    const k = daily ? gcZoneKey(t, z).slice(0, 10) : gcZoneKey(t, z);
-    if(pts.length && pts[pts.length - 1].k === k) continue;
-    pts.push({t, k, v: vis[k] || 0, e: ev[k] || 0});
-  }
-  if(daily){ const first = pts.findIndex(p => p.v || p.e); if(first > 0) pts.splice(0, Math.max(0, first - 1)); }
-  return {pts, z, daily};
-}
-function gcFmt(ms, z, o){ try{ return new Date(ms).toLocaleString([], Object.assign({timeZone: z}, o)); }catch(e){ return new Date(ms).toLocaleString(); } }
-function gcChartSvg(s, W){
-  const pts = s.pts, H = 240, L = 40, R = 12, T = 12, B = 30, iw = W - L - R, ih = H - T - B, n = pts.length;
-  const maxV = Math.max(1, ...pts.map(p => Math.max(GC_SHOW.v ? p.v : 0, GC_SHOW.e ? p.e : 0)));
-  const mag = Math.pow(10, Math.floor(Math.log10(maxV))), nice = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= maxV / 4) || mag;
-  const top = Math.ceil(maxV / nice) * nice, unit = Math.max(1, Math.round(nice));
-  const x = i => L + (n <= 1 ? iw / 2 : i * iw / (n - 1)), y = v => T + ih - v / top * ih;
-  let g = '';
-  for(let v = 0; v <= top + 1e-9; v += unit){
-    g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--line)" stroke-width="1"' + (v ? ' stroke-dasharray="2 3"' : '') + '/>' +
-      '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)">' + v.toLocaleString() + '</text>';
-  }
-  /* About 5 time labels, on round hours/days. */
-  const want = Math.max(2, Math.min(6, Math.floor(iw / 70)));
-  const span = s.daily ? [1, 2, 7, 14, 30, 60] : [1, 2, 3, 6, 12, 24, 48, 72, 168];
-  const every = span.find(k => n / k <= want) || span[span.length - 1];
-  const lab = s.daily ? {month: 'short', day: 'numeric'} : (n > 200 ? {month: 'short', day: 'numeric'} : n > 30 ? {weekday: 'short'} : {hour: 'numeric'});
-  pts.forEach((p, i) => {
-    const hr = +p.k.slice(11, 13);
-    const ok = s.daily ? (n - 1 - i) % every === 0 : every >= 24 ? hr === 0 && Math.round((p.t - pts[0].t) / 864e5) % (every / 24) === 0 : hr % every === 0;
-    if(ok) g += '<text x="' + x(i) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="11" fill="var(--muted)">' + esc(gcFmt(p.t, s.z, lab)) + '</text>';
-  });
-  const line = (key, col) => '<path d="' + pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p[key]).toFixed(1)).join('') + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
-  GC_CHART = {s, W, H, L, R, T, ih, x, y, n};
-  return '<div id="gc-chart" style="position:relative;touch-action:pan-y">' +
-    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" role="img" aria-label="Line graph of visitors and section and set opens over time" style="display:block;overflow:visible">' + g +
-    (GC_SHOW.e ? line('e', 'var(--viz2)') : '') + (GC_SHOW.v ? line('v', 'var(--viz1)') : '') +
-    '<g id="gc-hover" style="display:none"><line id="gc-hl" y1="' + T + '" y2="' + (T + ih) + '" stroke="var(--muted)" stroke-width="1"/>' +
-    '<circle id="gc-d2" r="4.5" fill="var(--viz2)" stroke="var(--card)" stroke-width="2"' + (GC_SHOW.e ? '' : ' display="none"') + '/><circle id="gc-d1" r="4.5" fill="var(--viz1)" stroke="var(--card)" stroke-width="2"' + (GC_SHOW.v ? '' : ' display="none"') + '/></g></svg>' +
-    '<div id="gc-tip" role="status" style="display:none;position:absolute;top:0;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:.8125rem;line-height:1.45;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap"></div></div>';
-}
-function gcChartHover(ev){
-  const c = GC_CHART, el = document.getElementById('gc-chart');
-  if(!c || !el) return;
-  const box = el.getBoundingClientRect(), px = (ev.clientX - box.left) * c.W / box.width;
-  const i = Math.max(0, Math.min(c.n - 1, Math.round((px - c.L) / ((c.W - c.L - c.R) / Math.max(1, c.n - 1)))));
-  const p = c.s.pts[i], X = c.x(i);
-  document.getElementById('gc-hover').style.display = '';
-  ['gc-hl'].forEach(id => { const l = document.getElementById(id); l.setAttribute('x1', X); l.setAttribute('x2', X); });
-  const d1 = document.getElementById('gc-d1'), d2 = document.getElementById('gc-d2');
-  d1.setAttribute('cx', X); d1.setAttribute('cy', c.y(p.v)); d2.setAttribute('cx', X); d2.setAttribute('cy', c.y(p.e));
-  const tip = document.getElementById('gc-tip');
-  const when = c.s.daily ? gcFmt(p.t, c.s.z, {weekday: 'short', month: 'short', day: 'numeric'}) : gcFmt(p.t, c.s.z, {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric'});
-  tip.innerHTML = '<div style="color:var(--muted)">' + esc(when) + '</div>' +
-    (GC_SHOW.v ? '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz1);vertical-align:middle;margin-right:6px"></span>Visitors <b>' + p.v.toLocaleString() + '</b></div>' : '') +
-    (GC_SHOW.e ? '<div><span style="display:inline-block;width:10px;height:3px;border-radius:2px;background:var(--viz2);vertical-align:middle;margin-right:6px"></span>Section &amp; set opens <b>' + p.e.toLocaleString() + '</b></div>' : '');
-  tip.style.display = '';
-  const sx = X * box.width / c.W, tw = tip.offsetWidth;
-  tip.style.left = Math.max(0, Math.min(box.width - tw, sx + (sx > box.width / 2 ? -tw - 12 : 12))) + 'px';
-}
-function gcChartLeave(){ const a = document.getElementById('gc-hover'), b = document.getElementById('gc-tip'); if(a) a.style.display = 'none'; if(b) b.style.display = 'none'; }
-async function renderStatsGraph(head, footer, r, rl){
-  app.innerHTML = head + '<div class="note">Loading…</div>'; window.scrollTo(0, 0);
-  let s, err = '', badKey = false;
-  try{ s = await gcSeries(r); }catch(e){ err = e.message || String(e); badKey = !!e.badKey; }
-  if(VIEW !== 'stats' || GC_RANGE !== r || GC_VIEWMODE !== 'graph') return;
-  let h = head;
-  if(err){
-    app.innerHTML = h + '<p class="note" style="color:var(--bad)">Couldn’t load the graph (' + esc(err) + '). ' +
-      (badKey ? 'Check that the key is right and has “Read statistics” ticked, or remove it and paste a new one.' : 'An ad blocker on this device can block it.') + '</p>' + footer;
-    return;
-  }
-  const tv = s.pts.reduce((a, p) => a + p.v, 0), te = s.pts.reduce((a, p) => a + p.e, 0);
-  const title = r === 'all' ? 'Visitors per day' : 'Visitors per hour · ' + rl.toLowerCase();
-  const sw = c => '<span style="display:inline-block;width:14px;height:3px;border-radius:2px;background:' + c + ';vertical-align:middle;margin-right:6px"></span>';
-  h += '<h3 style="margin:0 0 6px">' + title + '</h3>' +
-    '<div role="group" aria-label="Lines to show" style="display:flex;gap:4px 16px;flex-wrap:wrap;font-size:.875rem;margin-bottom:4px">' +
-    [['v', 'var(--viz1)', 'Visitors', tv], ['e', 'var(--viz2)', 'Section &amp; set opens', te]].map(x =>
-      '<label style="display:inline-flex;align-items:center;gap:6px;min-height:44px;cursor:pointer"><input type="checkbox" data-act="gcser" data-k="' + x[0] + '"' + (GC_SHOW[x[0]] ? ' checked' : '') +
-      ' style="width:18px;height:18px;margin:0;accent-color:' + x[1] + '">' + sw(x[1]) + x[2] + ' <b>' + x[3].toLocaleString() + '</b></label>').join('') + '</div>';
-  h += '<div id="gc-chart-slot"></div>';
-  const rows = s.pts.filter(p => p.v || p.e).reverse();
-  h += '<details style="margin-top:10px"><summary>Show as table</summary>' +
-    (rows.length ? '<table style="width:100%;border-collapse:collapse;font-size:.875rem;margin-top:6px"><thead><tr><th style="text-align:left;padding:4px 0">' + (s.daily ? 'Day' : 'Hour') + '</th><th style="text-align:right">Visitors</th><th style="text-align:right">Opens</th></tr></thead><tbody>' +
-      rows.map(p => '<tr style="border-top:1px solid var(--line)"><td style="padding:4px 0">' + esc(gcFmt(p.t, s.z, s.daily ? {weekday: 'short', month: 'short', day: 'numeric'} : {weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric'})) + '</td><td style="text-align:right">' + p.v.toLocaleString() + '</td><td style="text-align:right">' + p.e.toLocaleString() + '</td></tr>').join('') + '</tbody></table>'
-      : '<p class="note">No visits in this period.</p>') + '</details>';
-  h += '<p class="note">' +
-    (s.daily ? 'All time is shown by day for the last 180 days; hourly would be too many points to read. ' : '') +
-    'Times are in your GoatCounter timezone (' + esc(s.z) + '). ' + (s.daily ? 'Each day counts unique visitors that day, so someone who comes back on two days is counted on both.' : 'Each hour counts unique visitors in that hour, so someone who stays across two hours is counted in both.') + ' Tap or hover the graph to see each ' + (s.daily ? 'day' : 'hour') + '.</p>' + footer;
-  app.innerHTML = h;
-  gcDrawChart(s);
-}
-async function renderStats(){
-  VIEW = 'stats';
-  const r = GC_RANGE, key = gcKey(), rl = GC_RANGES.find(x => x[0] === r)[2];
-  const head = '<div class="top">' + ownerBackBtn() + '<div class="ttl">Site stats</div></div>' +
-    '<div class="seg" role="group" aria-label="Time range" style="margin-bottom:14px">' + GC_RANGES.map(x => '<button data-act="gcrange" data-r="' + x[0] + '" aria-pressed="' + (x[0] === r) + '">' + x[1] + '</button>').join('') + '</div>' +
-    '<div class="seg" role="group" aria-label="Show as" style="margin-bottom:14px">' + [['numbers', 'Numbers'], ['graph', 'Line graph']].map(x => '<button data-act="gcview" data-v="' + x[0] + '" aria-pressed="' + (x[0] === GC_VIEWMODE) + '">' + x[1] + '</button>').join('') + '</div>';
-  const keyLine = key ? '<p class="note">API key: saved on this device. <button class="link" data-act="gckeydel">Remove key</button></p>' : '';
-  const footer = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" data-act="stats">Refresh</button></div>' + keyLine;
-  const graph = GC_VIEWMODE === 'graph';
-  if((graph || GC_HOURS[r] <= 24) && !key){
-    app.innerHTML = head +
-      '<h3>' + (graph ? 'The line graph' : rl) + ' needs a GoatCounter API key</h3>' +
-      '<p class="note">GoatCounter’s public counter only counts whole days' + (graph ? ' and has no hour-by-hour data' : '') + '. For ' + (graph ? 'the graph' : 'the last 24 hours') + ', this page has to ask GoatCounter’s API, which needs a key. You only do this once per device. The key is saved in this browser only, and is never part of the website.</p>' +
-      '<ol class="note" style="padding-left:20px"><li>Open <a href="' + GC_SITE + '/user/api" target="_blank" rel="noopener">GoatCounter → Settings → API</a>.</li>' +
-      '<li>Create a new key and tick <b>only “Read statistics”</b>.</li><li>Copy the key and paste it below.</li></ol>' +
-      '<label class="lbl" for="gc-key">API key</label><input id="gc-key" class="field" autocomplete="off" spellcheck="false" placeholder="Paste your GoatCounter API key">' +
-      '<div style="margin-top:10px"><button class="btn" data-act="gckeysave">Save key</button></div>' +
-      '<p class="note">Only save it on your own devices: anyone using this browser could read your stats with it. You can delete the key in GoatCounter at any time.</p>' + footer;
-    window.scrollTo(0, 0);
-    return;
-  }
-  if(graph) return renderStatsGraph(head, footer, r, rl);
-  app.innerHTML = head + '<div class="note">Loading…</div>'; window.scrollTo(0, 0);
-  const secs = SECS.filter(sc => sc.key !== 'Review');
-  const sets = DATA.filter(z => z.sec !== 'Review' && !z._src && !z.soon);
-  const page = location.pathname || '/';
-  let total = null, visits = null, secN, misN, setN, errMsg = '', badKey = false, approx = false;
-  if(r !== 'all' && key){
-    try{
-      const m = await gcApiHits(r);
-      const get = p => (m[p.toLowerCase()] || {n: 0}).n;
-      secN = secs.map(sc => get(gcSecPath(sc)));
-      misN = secs.map(sc => get(gcMissPath(sc)));
-      setN = sets.map(z => get(gcSetPath(z)));
-      visits = 0; total = 0;
-      Object.keys(m).forEach(p => { total += m[p].n; if(!m[p].ev) visits += m[p].n; });
-    }catch(e){
-      errMsg = e.message || String(e); badKey = !!e.badKey;
-      secN = secs.map(() => null); misN = secN.slice(); setN = sets.map(() => null);
-    }
-  } else {
-    /* Public counter: whole UTC days. "Last 7 days" counts from midnight UTC 6 days ago. */
-    let start = '';
-    if(r !== 'all'){ approx = true; start = new Date(Date.now() - (GC_HOURS[r] / 24 - 1) * 86400000).toISOString().slice(0, 10); }
-    gcFreshEnd();
-    const jobs = [gcCount('TOTAL', start), gcCount(page, start)]
-      .concat(secs.map(sc => gcCount(gcSecPath(sc), start)))
-      .concat(secs.map(sc => gcCount(gcMissPath(sc), start)))
-      .concat(sets.map(z => gcCount(gcSetPath(z), start)));
-    const got = await Promise.allSettled(jobs);
-    const val = x => x.status === 'fulfilled' ? x.value : null;
-    const failed = got.filter(x => x.status === 'rejected');
-    if(failed.length === got.length) errMsg = String((failed[0].reason && failed[0].reason.message) || failed[0].reason);
-    total = val(got[0]);
-    const pageN = val(got[1]);
-    secN = secs.map((_, i) => val(got[2 + i]));
-    misN = secs.map((_, i) => val(got[2 + secs.length + i]));
-    setN = sets.map((_, i) => val(got[2 + 2 * secs.length + i]));
-    /* GoatCounter keeps "/x/", "/x/index.html", "/x?y" etc. as separate pages, so the
-       count for this one path can miss visitors. Total minus the events we track covers
-       every variant; use whichever is larger. */
-    const evN = secN.concat(misN, setN).reduce((a, n) => a + (n || 0), 0);
-    visits = total == null ? pageN : Math.max(pageN || 0, total - evN);
-  }
-  if(VIEW !== 'stats' || GC_RANGE !== r || GC_VIEWMODE !== 'numbers') return;
-  const num = v => v == null ? '–' : v.toLocaleString();
-  let h = head;
-  if(errMsg){
-    h += '<p class="note" style="color:var(--bad)">Couldn’t load the counts (' + esc(errMsg) + '). ' +
-      (badKey ? 'Check that the key is right and has “Read statistics” ticked, or remove it and paste a new one.</p>' :
-        key && r !== 'all' ? 'An ad blocker on this device can block it.</p>' :
-        'In GoatCounter, open <b>Settings</b> and turn on <b>“Allow adding visitor counts on your website”</b>, then refresh. An ad blocker on this device can also block it.</p>');
-  }
-  h += '<div class="pair">' +
-    '<div class="tile"><span class="t" style="font-size:28px">' + num(visits) + '</span><span class="s">Visitors to the site · ' + rl.toLowerCase() + '</span></div>' +
-    '<div class="tile"><span class="t" style="font-size:28px">' + num(total) + '</span><span class="s">All tracked activity (visits + section and set opens)</span></div></div>';
-  const bars = rows => {
-    const max = Math.max(1, ...rows.map(x => x.n || 0));
-    return rows.map(x => '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>' + x.label + '</span><b>' + num(x.n) + '</b></div>' +
-      '<div class="bar" style="margin:4px 0 0"><i style="width:' + ((x.n || 0) / max * 100) + '%"></i></div></div>').join('');
-  };
-  h += '<h3 style="margin-top:20px">Sections opened · ' + rl.toLowerCase() + '</h3>' + bars(secs.map((sc, i) => ({label: sc.name, n: secN[i]})));
-  secs.forEach((sc, si) => {
-    const rows = sets.map((z, i) => ({z, n: setN[i]})).filter(x => x.z.sec === sc.key).map(x => ({label: esc(x.z.title) + (x.z.grp ? ' <span style="color:var(--muted)">· ' + esc(x.z.grp) + '</span>' : ''), n: x.n}));
-    rows.push({label: '<i>Missed questions review</i>', n: misN[si]});
-    h += '<h3 style="margin-top:20px">' + sc.name + ': sets started</h3>' + bars(rows);
-  });
-  const rangeNote = r === 'all' ? 'All time.' :
-    approx ? 'Counted in whole days (from midnight UTC), so this can include up to a day more than ' + rl.toLowerCase() + '. Add an API key on the 24 hours tab for exact hours.' :
-    'GoatCounter groups visits by the hour, so this counts from the start of the hour ' + GC_HOURS[r] + ' hours ago (' + new Date(gcStartMs(r)).toLocaleString([], {weekday: 'short', hour: 'numeric', minute: '2-digit'}) + ').';
-  h += '<p class="note">' + rangeNote + ' Counts are unique visitors from GoatCounter, and can take a minute or two to show up. Visitors with ad blockers aren’t counted, so real numbers are a bit higher. Section and set counts start from the day they were added.</p>' + footer;
-  app.innerHTML = h;
+  OWNER_JS.then(() => { if(push) hpush(page); OWNER_PAGES[page](); }, () => { OWNER_JS = null; if(!push) renderMenu(); });
 }
 
-renderMenu();
-initSuggest();
-if(location.hash === '#inbox') renderInbox();
-if(location.hash === '#stats') renderStats();
-window.addEventListener('hashchange', () => { if(location.hash === '#stats') renderStats(); });
-window.addEventListener('hashchange', () => { if(location.hash === '#inbox') renderInbox(); });
+/* ---------- BACK BUTTON ----------
+   Each screen you open is added to the browser's history, so the phone's Back button (or a swipe back) goes up one
+   screen instead of leaving the site: question → set list → front page. Moving from one question to the next is not
+   a new screen, so Back in the middle of a set goes to the set list, and the "Continue" card brings you back.
+   Every entry remembers which screen it is ("p") and how deep it is ("d"); the on-screen back buttons simply go back
+   one entry, so the two always agree. */
+function hpush(p, more){ try{ history.pushState(Object.assign({p: p, d: ((history.state && history.state.d) || 0) + 1}, more), ''); }catch(e){} }
+function hback(otherwise){
+  if(history.state && history.state.d > 0){ history.back(); return; }
+  /* Nothing of ours to go back to (the page was opened straight on #review, say): show the screen directly. */
+  try{ history.replaceState({p: 'home', d: 0}, '', location.pathname + location.search); }catch(e){}
+  otherwise();
+}
+/* Show the screen that the current history entry stands for. */
+function route(){
+  if(VIEW === 'rev' && typeof rvSaveNote === 'function') rvSaveNote();
+  const st = history.state, p = st ? st.p : (HASH_PAGES[location.hash] || 'home');
+  const si = st && SECS[st.s] ? st.s : -1;
+  if(p === 'quiz'){
+    if(!S.order.length){ const r = loadRun(); if(r){ S = r.S; SECI = r.si; } }   /* after a refresh: carry on from the saved place */
+    else if(si >= 0) SECI = si;
+    if(S.order.length && SECI >= 0){ showRun(); return; }
+    SECI = si;
+    try{ history.replaceState({p: si >= 0 ? 'sec' : 'home', s: si, d: st.d}, ''); }catch(e){}
+    renderMenu();
+  }
+  else if(p === 'sec' && si >= 0){ SECI = si; renderMenu(); }
+  else if(p === 'settings'){ SET_FROM = st.from === 'q' ? 'q' : 'menu'; renderSettings(); window.scrollTo(0, 0); }
+  else if(p === 'sug') renderSuggest(CTX, st.ret === 'q' ? 'q' : 'menu');
+  else if(p === 'secret' || p === 'rev' || p === 'inb' || p === 'stats') openOwner(p);
+  else { SECI = -1; renderMenu(); }
+}
+try{ history.scrollRestoration = 'manual'; }catch(e){}
+if(!history.state && !HASH_PAGES[location.hash]){ try{ history.replaceState({p: 'home', d: 0}, ''); }catch(e){} }
+route();
+window.addEventListener('popstate', () => { route(); setTimeout(() => { if(VIEW !== 'q' && !app.contains(document.activeElement)) focusHead(); }, 0); });
+window.addEventListener('hashchange', () => { const p = HASH_PAGES[location.hash]; if(p && VIEW !== p) openOwner(p); });
 
 /* ---------- STAY UP TO DATE ----------
    Phones keep tabs open for days, so a visitor can come back to an old copy of the page.
    When the page opens, and each time someone switches back to it, check version.json (never cached).
    If a newer version is published: reload right away on the menu, or offer an "Update now" bar
-   during a practice set so nobody loses their place. Bump APP_VERSION here and in version.json together. */
+   during a practice set. The set in progress is saved, so it carries on from the same question after the reload. */
 /* Reload at most once per new version: if the server still hands back the old page (its cache can lag a few minutes), stop instead of looping. */
 function autoReload(v){
   try{ if(sessionStorage.getItem('wh1_reloaded_for') === String(v)) return false; sessionStorage.setItem('wh1_reloaded_for', String(v)); }catch(e){ return false; }
