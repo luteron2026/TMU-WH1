@@ -249,7 +249,7 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* On every update, run: node tools/check.js --release   It raises APP_VERSION here and "version" in version.json together, and sets APP_UPDATED to today (see README). */
-const APP_VERSION = 40;
+const APP_VERSION = 41;
 const APP_UPDATED = '2026-11-17';
 /* The number shown on the menu, like "v37.19". The part after the dot is worked out from APP_VERSION,
    so it changes to a new number from 01 to 99 on every update and everyone sees the same one. */
@@ -287,7 +287,7 @@ function saveMissed(m){ try{ localStorage.setItem(MK, JSON.stringify(m)); }catch
    so the list survives questions being reordered, and a question used in two sets is only listed once. */
 DATA.forEach(z => z.qs.forEach((q, i) => { if(!q.k) q.k = 'x' + z.id + '_' + i; }));
 const QIDX = {};
-DATA.forEach(z => z.qs.forEach(q => { (QIDX[q.k] = QIDX[q.k] || []).push({sec: z.sec, q: q}); }));
+DATA.forEach(z => z.qs.forEach(q => { (QIDX[q.k] = QIDX[q.k] || []).push({sec: z.sec, grp: z.grp || '', q: q}); }));
 /* One-time carry-over: older versions remembered a missed question as "set id:position". */
 (function(){
   const m = loadMissed(); let changed = false;
@@ -299,10 +299,19 @@ DATA.forEach(z => z.qs.forEach(q => { (QIDX[q.k] = QIDX[q.k] || []).push({sec: z
   });
   if(changed) saveMissed(m);
 })();
-function missedKeys(secKey){
+/* A section's missed questions are listed one group at a time (Quiz 2, then Exam 2). A question that is in
+   sets of both groups is on both lists, and leaves both once it has been answered right twice. */
+function missedKeys(secKey, grp){
   const m = loadMissed();
-  return Object.keys(m).filter(k => QIDX[k] && (!secKey || QIDX[k].some(o => o.sec === secKey)));
+  return Object.keys(m).filter(k => QIDX[k] && (!secKey || QIDX[k].some(o => o.sec === secKey && (grp == null || o.grp === grp))));
 }
+function secGroups(sc){
+  const out = [];
+  DATA.forEach(z => { const g = z.grp || ''; if(z.sec === sc.key && out.indexOf(g) < 0) out.push(g); });
+  return out;
+}
+/* "Quiz 2 · pages 33–41 & 46–51" is shown as "Quiz 2". A set with no group goes by its section's name. */
+function grpName(sc, grp){ return grp ? grp.split(' · ')[0] : sc.name.replace(/&amp;/g, '&'); }
 function trackMissed(q, ok){
   const m = loadMissed();
   if(!ok) m[q.k] = 0;
@@ -316,18 +325,18 @@ function clearMissed(secKey){
   saveMissed(m);
 }
 /* The missed-questions review is a made-up set holding the given questions. It takes the place of any earlier one. */
-function reviewSet(si, keys){
+function reviewSet(si, keys, grp){
   const sc = SECS[si]; if(!sc) return -1;
-  const qs = keys.map(k => { const o = (QIDX[k] || []).find(x => x.sec === sc.key); return o && o.q; });
+  const qs = keys.map(k => { const o = (QIDX[k] || []).find(x => x.sec === sc.key && (grp == null || x.grp === grp)); return o && o.q; });
   if(!qs.length || qs.some(q => !q)) return -1;
-  const z = {id:'M', num:'R', badge:'R', title:'Missed questions', lab:sc.name.replace(/&amp;/g, '&') + ' · missed questions', sec:'Review', grp:'', sub:'', qs:qs, _src:keys, _sec:sc.key};
+  const z = {id:'M', num:'R', badge:'R', title:'Missed questions', lab:grpName(sc, grp) + ' · missed questions', sec:'Review', grp:'', sub:'', qs:qs, _src:keys, _sec:sc.key, _grp:grp};
   let at = DATA.findIndex(d => d.sec === 'Review');
   if(at >= 0) DATA[at] = z; else at = DATA.push(z) - 1;
   return at;
 }
-function startMissed(si){
+function startMissed(si, grp){
   const sc = SECS[si]; if(!sc) return false;
-  const at = reviewSet(si, missedKeys(sc.key)); if(at < 0) return false;
+  const at = reviewSet(si, missedKeys(sc.key, grp), grp); if(at < 0) return false;
   SECI = si;
   startQuiz(at);
   return true;
@@ -628,9 +637,14 @@ function renderMenu(){
       '<p class="sub">' + esc(sc.pages) + ' · ' + sets.length + ' practice sets · ' + (qn ? qn + ' questions' : 'coming soon') + '</p>' +
       '<div class="menu-note">' + sc.note + '</div>';
     h += resumeCard(sc.key);
-    const mk = missedKeys(sc.key).length;
-    if(mk) h += '<button class="card" data-act="missed" data-s="' + SECI + '"><span class="num sm">R</span><span><div class="t">Missed questions</div><div class="s">Only the ones you got wrong in ' + esc(sc.name) + '</div><div class="m">Leaves the list after you get it right twice</div></span><span class="chip">' + mk + '</span></button>' +
-      '<div style="text-align:right;margin:-6px 0 6px"><button class="link" data-act="missedreset" data-s="' + SECI + '">Reset missed questions</button></div>';
+    let anyMk = false;
+    secGroups(sc).forEach((g, gi) => {
+      const mk = missedKeys(sc.key, g).length; if(!mk) return;
+      anyMk = true;
+      const nm = esc(grpName(sc, g));
+      h += '<button class="card" data-act="missed" data-s="' + SECI + '" data-g="' + gi + '"><span class="num sm">R</span><span><div class="t">' + nm + ' missed questions</div><div class="s">Only the ones you got wrong in ' + nm + '</div><div class="m">Leaves the list after you get it right twice</div></span><span class="chip">' + mk + '</span></button>';
+    });
+    if(anyMk) h += '<div style="text-align:right;margin:-6px 0 6px"><button class="link" data-act="missedreset" data-s="' + SECI + '">Reset missed questions</button></div>';
     let lastGrp = '';
     DATA.forEach((z, i) => {
       if(z.sec !== sc.key) return;
@@ -672,7 +686,7 @@ function saveRun(){
     const z = DATA[S.qi]; if(!z || !S.order.length) return;
     const byKey = o => { const r = {}; Object.keys(o || {}).forEach(i => { r[z.qs[i].k] = o[i]; }); return r; };
     const run = {id: z.id, keys: S.order.map(i => z.qs[i].k), pos: S.pos, res: byKey(S.res), given: byKey(S.given), oo: byKey(S.oo), full: S.full, fb: S.fb};
-    if(z._sec){ run.sec = z._sec; run.all = z.qs.map(q => q.k); }
+    if(z._sec){ run.sec = z._sec; run.all = z.qs.map(q => q.k); if(z._grp != null) run.grp = z._grp; }
     localStorage.setItem(RK, JSON.stringify(run));
   }catch(e){}
 }
@@ -683,7 +697,7 @@ function loadRun(){
   try{
     const r = readRun(); if(!r) return null;
     let qi, si;
-    if(r.id === 'M'){ si = SECS.findIndex(sc => sc.key === r.sec); qi = reviewSet(si, r.all || r.keys); }
+    if(r.id === 'M'){ si = SECS.findIndex(sc => sc.key === r.sec); qi = reviewSet(si, r.all || r.keys, r.grp); }
     else { qi = DATA.findIndex(z => String(z.id) === String(r.id) && z.sec !== 'Review'); si = qi < 0 ? -1 : SECS.findIndex(sc => sc.key === DATA[qi].sec); }
     if(qi < 0 || si < 0) return null;
     const z = DATA[qi], at = {};
@@ -702,7 +716,7 @@ function resumeCard(secKey){
   const z = r.id === 'M' ? null : DATA.find(d => String(d.id) === String(r.id) && d.sec !== 'Review');
   const sec = z ? z.sec : r.sec, sc = SECS.find(x => x.key === sec);
   if((r.id !== 'M' && !z) || !sc || (secKey && sec !== secKey)) return '';
-  return '<button class="card" data-act="resume" style="border-color:var(--accent)"><span class="num sm">▶</span><span><div class="t">Continue ' + (z ? esc(z.title) : 'missed questions') + '</div>' +
+  return '<button class="card" data-act="resume" style="border-color:var(--accent)"><span class="num sm">▶</span><span><div class="t">Continue ' + (z ? esc(z.title) : (r.grp != null ? esc(grpName(sc, r.grp)) + ' ' : '') + 'missed questions') + '</div>' +
     '<div class="s">' + (secKey ? '' : sc.name + ' · ') + 'Pick up where you left off</div></span><span class="chip">' + (r.pos + 1) + ' / ' + r.keys.length + '</span></button>';
 }
 /* Answer choices are shown in a new order on every run, so a retake can't be passed by remembering "it was C".
@@ -873,7 +887,7 @@ app.addEventListener('click', e => {
   }
   else if(a === 'missedreset'){ const sc = SECS[+b.dataset.s]; if(!sc) return; if(window.confirm && !window.confirm('Reset the missed questions list for ' + sc.name.replace(/&amp;/g, '&') + '?')) return; clearMissed(sc.key); renderMenu(); }
   else if(a === 'missedresetall'){ if(window.confirm && !window.confirm('Reset the missed questions list for every section?')) return; clearMissed(); renderSettings(); }
-  else if(a === 'missed'){ gcMissed(+b.dataset.s); if(startMissed(+b.dataset.s)) hpush('quiz', {s: SECI}); }
+  else if(a === 'missed'){ const sc = SECS[+b.dataset.s]; if(!sc) return; gcMissed(+b.dataset.s); if(startMissed(+b.dataset.s, secGroups(sc)[+b.dataset.g])) hpush('quiz', {s: SECI}); }
   else if(a === 'menu') hback(renderMenu);
   else if(a === 'home') hback(() => { SECI = -1; renderMenu(); });
   else if(a === 'sec'){ SECI = +b.dataset.s; gcSec(SECI); hpush('sec', {s: SECI}); renderMenu(); }
