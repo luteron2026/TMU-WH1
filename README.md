@@ -15,7 +15,7 @@ A self-contained study site for a World History course. It turns the course's st
   - Timeline questions (dates and events from the course timelines)
 - **Final Exam** — covers note packet pages 1–80. Practice sets are coming soon.
 - **Instant feedback** — answers are marked right or wrong as you go, with progress shown for each set.
-- **Keeps your place** — a set in progress is saved on your device, so a refresh or a closed tab does not start it over. A **Continue** card on the menu takes you back to it, and the phone's Back button goes up one screen instead of leaving the site.
+- **Keeps your place** — a set in progress is saved on your device, so a refresh or a closed tab does not start it over. A **Continue** card on the menu takes you back to it, and the phone's Back button goes up one screen instead of leaving the site. **Reset this set** under the card clears the saved place, so the set starts from the beginning.
 - **Settings** — light / dark color theme, highlighter style, and reading options such as text size.
 
 ## Using it

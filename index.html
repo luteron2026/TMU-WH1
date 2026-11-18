@@ -179,6 +179,8 @@ textarea.field{min-height:130px;resize:vertical}
 select.field{min-height:48px}
 .ctx{margin-top:4px;padding:10px 12px;border-radius:var(--r2);background:var(--accent-soft);font-size:0.84375rem}
 .link{background:none;border:0;padding:8px 0;min-height:44px;color:var(--accent);font-weight:600;font-size:0.90625rem;text-decoration:underline}
+.rsrow{display:flex;justify-content:flex-end;margin-top:2px}
+.rsrow .link{padding:8px 4px}
 .status{margin-top:12px;font-size:0.90625rem;min-height:20px}
 .status.bad{color:var(--bad)} .status.good{color:var(--good)}
 .note{margin-top:10px;font-size:0.875rem;color:var(--muted)}
@@ -249,7 +251,7 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* On every update, run: node tools/check.js --release   It raises APP_VERSION here and "version" in version.json together, and sets APP_UPDATED to today (see README). */
-const APP_VERSION = 45;
+const APP_VERSION = 46;
 const APP_UPDATED = '2026-11-18';
 /* The number shown on the menu, like "v37.19". The part after the dot is worked out from APP_VERSION,
    so it changes to a new number from 01 to 99 on every update and everyone sees the same one. */
@@ -717,7 +719,8 @@ function resumeCard(secKey){
   const sec = z ? z.sec : r.sec, sc = SECS.find(x => x.key === sec);
   if((r.id !== 'M' && !z) || !sc || (secKey && sec !== secKey)) return '';
   return '<button class="card" data-act="resume" style="border-color:var(--accent)"><span class="num sm">▶</span><span><div class="t">Continue ' + (z ? esc(z.title) : (r.grp != null ? esc(grpName(sc, r.grp)) + ' ' : '') + 'missed questions') + '</div>' +
-    '<div class="s">' + (secKey ? '' : sc.name + ' · ') + 'Pick up where you left off</div></span><span class="chip">' + (r.pos + 1) + ' / ' + r.keys.length + '</span></button>';
+    '<div class="s">' + (secKey ? '' : sc.name + ' · ') + 'Pick up where you left off</div></span><span class="chip">' + (r.pos + 1) + ' / ' + r.keys.length + '</span></button>' +
+    '<div class="rsrow"><button class="link" data-act="resumereset">Reset this set</button></div>';
 }
 /* Answer choices are shown in a new order on every run, so a retake can't be passed by remembering "it was C".
    The last choice ("All of the above...", "None of the above...") always stays last. */
@@ -885,6 +888,7 @@ app.addEventListener('click', e => {
     if(SECI !== r.si){ SECI = r.si; hpush('sec', {s: SECI}); }   /* opened from the front page: Back goes to the set list first */
     hpush('quiz', {s: SECI}); showRun();
   }
+  else if(a === 'resumereset'){ if(window.confirm && !window.confirm('Reset your progress on this set? The Continue card goes away and the set starts from the beginning next time.')) return; clearRun(); renderMenu(); }
   else if(a === 'missedreset'){ const sc = SECS[+b.dataset.s]; if(!sc) return; if(window.confirm && !window.confirm('Reset the missed questions list for ' + sc.name.replace(/&amp;/g, '&') + '?')) return; clearMissed(sc.key); renderMenu(); }
   else if(a === 'missedresetall'){ if(window.confirm && !window.confirm('Reset the missed questions list for every section?')) return; clearMissed(); renderSettings(); }
   else if(a === 'missed'){ const sc = SECS[+b.dataset.s]; if(!sc) return; gcMissed(+b.dataset.s); if(startMissed(+b.dataset.s, secGroups(sc)[+b.dataset.g])) hpush('quiz', {s: SECI}); }
