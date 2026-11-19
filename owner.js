@@ -201,6 +201,8 @@ async function renderInbox(){
   let h = head.replace('</div></div>', '</div><div class="cnt">' + open.length + ' open</div></div>') +
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="inbox">Refresh</button>' + (SUGGEST.relayTopic ? '<button class="btn" data-act="sugdiag">Test connection</button>' : '') + (open.length ? '<button class="btn" data-act="sugcopyall">Copy all open</button>' : '') + '</div>' +
     '<div id="sg-status" class="status" role="status"></div>';
+  if(gformSpec()) h += '<p class="note" style="margin-top:0">Suggestions also go to your Google Form, where they are kept. ' +
+    (SUGGEST.googleResponses ? '<a href="' + esc(SUGGEST.googleResponses.replace(/\/edit.*$/, '/edit#responses')) + '" target="_blank" rel="noopener">Open the form responses</a>.' : 'Open the form in Google Forms and pick Responses to read them.') + '</p>';
   if(SUGGEST.relayTopic) h += '<p class="note" style="margin-top:0">The relay keeps messages for about 12 hours. Each time you open this inbox, new ones are saved on this device.</p>';
   notes.forEach(n => { h += '<p class="note" style="color:var(--bad)">' + esc(n) + '</p>'; });
   h += '<pre id="sg-diag" style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:8px 0 0"></pre>';
