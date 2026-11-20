@@ -251,8 +251,8 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* On every update, run: node tools/check.js --release   It raises APP_VERSION here and "version" in version.json together, and sets APP_UPDATED to today (see README). */
-const APP_VERSION = 47;
-const APP_UPDATED = '2026-11-18';
+const APP_VERSION = 49;
+const APP_UPDATED = '2026-11-20';
 /* The number shown on the menu, like "v37.19". The part after the dot is worked out from APP_VERSION,
    so it changes to a new number from 01 to 99 on every update and everyone sees the same one. */
 const APP_VERSION_LABEL = APP_VERSION + '.' + String((Math.imul(APP_VERSION, 2654435761) >>> 0) % 99 + 1).padStart(2, '0');
@@ -263,13 +263,17 @@ document.write('<script src="questions.js?v=' + APP_VERSION + '"><\/script>');
 </script>
 <script>
 /* ===== SUGGESTION BOX SETUP (for self-hosting) =====
-   relayTopic: suggestions are sent to a free public relay (ntfy.sh). No account or API key.
+   googleForm: a Google Form "pre-filled link" (see README, "Suggestions via Google Form"). Each suggestion is
+     saved as a form response, kept as long as you like, with Google's email notification for new responses.
+     The link's placeholder answers TYPE, NOTE, NAME, EXAM, QNUM and QUESTION tell the page which box gets what.
+   googleResponses: optional. The form's edit link, so the hidden inbox can open the responses.
+   relayTopic: suggestions are also sent to a free public relay (ntfy.sh). No account or API key.
      Anyone who knows the topic name can read it, so keep it private. Messages stay on the relay ~12 hours.
    endpoint / accessKey: optional. A Formspree or Web3Forms address, if you also want suggestions emailed to you.
    Set relayTopic to '' to turn the relay off.
    To open the hidden inbox: tap the small "Formats" line at the bottom of the menu 5 times, or add #inbox to the page address. */
 let UPDATE_READY = 0, LAST_CHECK = 0;
-const SUGGEST = { relayTopic: 'whx1-be9550a0735df7b80b89', endpoint: '', accessKey: '' };
+const SUGGEST = { googleForm: 'https://docs.google.com/forms/d/e/1FAIpQLSdkY3vp4zvhSQ_kuBFZaCnG1SXHSziLfQVEJ6JmCKzCAC8PHg/viewform?usp=pp_url&entry.198036816=TYPE&entry.212889134=NOTE&entry.1304214896=NAME&entry.677728665=EXAM&entry.829690690=QNUM&entry.49107539=QUESTION', googleResponses: '', relayTopic: 'whx1-be9550a0735df7b80b89', endpoint: '', accessKey: '' };
 
 
 const app = document.getElementById('app');
@@ -923,7 +927,19 @@ app.addEventListener('keydown', e => {
 
 /* ---------- SUGGESTIONS ---------- */
 const RELAY = 'https://ntfy.sh';
-function canSubmit(){ return !!(SUGGEST.relayTopic || SUGGEST.endpoint); }
+function canSubmit(){ return !!(gformSpec() || SUGGEST.relayTopic || SUGGEST.endpoint); }
+/* Reads the pre-filled link once: the form's submit address, and which entry.N box holds each placeholder. */
+let GFORM;
+function gformSpec(){
+  if(GFORM !== undefined) return GFORM;
+  GFORM = null;
+  try{
+    const u = new URL(SUGGEST.googleForm), keys = {TYPE:'cat', NOTE:'text', NAME:'name', EXAM:'exam', QNUM:'qn', QUESTION:'q'}, map = {};
+    u.searchParams.forEach((v, k) => { const f = keys[v.trim().toUpperCase()]; if(/^entry\.\d+$/.test(k) && f) map[f] = k; });
+    if(map.text) GFORM = {action: u.origin + u.pathname.replace(/\/viewform.*$/, '/formResponse'), map: map};
+  }catch(e){}
+  return GFORM;
+}
 function setStatus(msg, cls){ const el = document.getElementById('sg-status'); if(el){ el.textContent = msg || ''; el.className = 'status ' + (cls || ''); } }
 function ctxLabel(c){ return c ? (typeof c.exam === 'number' ? 'Exam ' + c.exam : c.exam) + ' · Question ' + c.qn : ''; }
 function titleOf(it){ return it.title || (it.cat + (it.ctx ? ' · ' + ctxLabel(it.ctx) : '') + (it.name ? ' · ' + it.name : '')); }
@@ -973,6 +989,15 @@ async function relayPublish(item){
   const res = await fetch(RELAY, {method: 'POST', body: JSON.stringify(body)});
   if(!res.ok) throw {code: 'relay', message: 'HTTP ' + res.status};
 }
+async function gformPublish(item){
+  const g = gformSpec(), c = item.ctx || {};
+  const vals = {cat: item.cat, text: item.text, name: item.name || 'Anonymous',
+    exam: c.exam === undefined ? 'General' : (typeof c.exam === 'number' ? 'Exam ' + c.exam : c.exam), qn: c.qn || '', q: c.q || ''};
+  const body = new URLSearchParams();
+  Object.keys(g.map).forEach(f => body.append(g.map[f], String(vals[f])));
+  /* Google does not allow reading the reply from another site, so a request that goes through counts as sent. */
+  await fetch(g.action, {method: 'POST', mode: 'no-cors', body: body});
+}
 async function postToEndpoint(item){
   const where = item.ctx ? ctxLabel(item.ctx) : 'General';
   const body = {
@@ -994,6 +1019,7 @@ async function sendSuggestion(){
   const btn = document.getElementById('sg-send'); if(btn) btn.disabled = true;
   setStatus('Sending…');
   const jobs = [];
+  if(gformSpec()) jobs.push(gformPublish(item));
   if(SUGGEST.relayTopic) jobs.push(relayPublish(item));
   if(SUGGEST.endpoint) jobs.push(postToEndpoint(item));
   let sent = false, why = '';

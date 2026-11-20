@@ -82,3 +82,14 @@ Spotted a wrong answer or a typo in a question? Open an issue or a pull request 
 ## License
 
 Released under the [MIT License](LICENSE).
+
+## Suggestions via Google Form
+
+Suggestions can be saved as Google Form responses. They are kept until you delete them, and Google can email you for each new one. The page keeps its own suggestion box and sends the answers to the form in the background, so a suggestion made from a question still carries that exam, question number and question text.
+
+1. Create a Google Form with six **Short answer** or **Paragraph** questions: Type, Note, Name, Exam, Question #, Question text. Leave them all optional.
+2. In **Settings**: turn off "Collect email addresses" and "Limit to 1 response". On a school or work Google account, also turn off "Restrict to users in your organization".
+3. Open the **⋮** menu and choose **Get pre-filled link**. Type these exact placeholder answers: `TYPE`, `NOTE`, `NAME`, `EXAM`, `QNUM`, `QUESTION`. Click **Get link**, then **Copy link**.
+4. Paste that link into `googleForm` in the `SUGGEST` line of `index.html`. Optionally paste the form's edit link (the address of the editing page) into `googleResponses` so the hidden inbox links to the responses.
+5. For notifications: in the form, go to **Responses**, then **⋮**, then **Get email notifications for new responses**. Choose **Link to Sheets** too if you want a spreadsheet.
+6. Send a test suggestion from the page and check that it shows up under Responses. Once it does, you can set `relayTopic` to `''` to stop using the 12-hour relay.
