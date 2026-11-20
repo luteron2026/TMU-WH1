@@ -184,13 +184,6 @@ select.field{min-height:48px}
 .status{margin-top:12px;font-size:0.90625rem;min-height:20px}
 .status.bad{color:var(--bad)} .status.good{color:var(--good)}
 .note{margin-top:10px;font-size:0.875rem;color:var(--muted)}
-.inb{margin-top:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--card)}
-.inb.done{opacity:.6}
-.inb .meta{font-size:0.78125rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
-.inb .txt{margin-top:6px;white-space:pre-wrap;word-break:break-word}
-.inb .cq{margin-top:8px;padding:8px 10px;border-radius:var(--r2);background:var(--accent-soft);font-size:0.8125rem}
-.inb .row{display:flex;gap:8px;margin-top:10px}
-.inb .row .btn{min-height:40px;padding:4px 12px;font-size:0.875rem}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 [tabindex="-1"]:focus{outline:none}
 
@@ -251,7 +244,7 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* On every update, run: node tools/check.js --release   It raises APP_VERSION here and "version" in version.json together, and sets APP_UPDATED to today (see README). */
-const APP_VERSION = 50;
+const APP_VERSION = 51;
 const APP_UPDATED = '2026-11-20';
 /* The number shown on the menu, like "v37.19". The part after the dot is worked out from APP_VERSION,
    so it changes to a new number from 01 to 99 on every update and everyone sees the same one. */
@@ -264,16 +257,11 @@ document.write('<script src="questions.js?v=' + APP_VERSION + '"><\/script>');
 <script>
 /* ===== SUGGESTION BOX SETUP (for self-hosting) =====
    googleForm: a Google Form "pre-filled link" (see README, "Suggestions via Google Form"). Each suggestion is
-     saved as a form response, kept as long as you like, with Google's email notification for new responses.
+     saved as a form response. Read them in Google Forms under Responses.
      The link's placeholder answers TYPE, NOTE, NAME, EXAM, QNUM and QUESTION tell the page which box gets what.
-   googleResponses: optional. The form's edit link, so the hidden inbox can open the responses.
-   relayTopic: suggestions are also sent to a free public relay (ntfy.sh). No account or API key.
-     Anyone who knows the topic name can read it, so keep it private. Messages stay on the relay ~12 hours.
-   endpoint / accessKey: optional. A Formspree or Web3Forms address, if you also want suggestions emailed to you.
-   Set relayTopic to '' to turn the relay off.
-   To open the hidden inbox: tap the small "Formats" line at the bottom of the menu 5 times, or add #inbox to the page address. */
+   endpoint / accessKey: optional. A Formspree or Web3Forms address, if you also want suggestions emailed to you. */
 let UPDATE_READY = 0, LAST_CHECK = 0;
-const SUGGEST = { googleForm: 'https://docs.google.com/forms/d/e/1FAIpQLSdkY3vp4zvhSQ_kuBFZaCnG1SXHSziLfQVEJ6JmCKzCAC8PHg/viewform?usp=pp_url&entry.198036816=TYPE&entry.212889134=NOTE&entry.1304214896=NAME&entry.677728665=EXAM&entry.829690690=QNUM&entry.49107539=QUESTION', googleResponses: '', relayTopic: '', endpoint: '', accessKey: '' };
+const SUGGEST = { googleForm: 'https://docs.google.com/forms/d/e/1FAIpQLSdkY3vp4zvhSQ_kuBFZaCnG1SXHSziLfQVEJ6JmCKzCAC8PHg/viewform?usp=pp_url&entry.198036816=TYPE&entry.212889134=NOTE&entry.1304214896=NAME&entry.677728665=EXAM&entry.829690690=QNUM&entry.49107539=QUESTION', endpoint: '', accessKey: '' };
 
 
 const app = document.getElementById('app');
@@ -926,8 +914,7 @@ app.addEventListener('keydown', e => {
 });
 
 /* ---------- SUGGESTIONS ---------- */
-const RELAY = 'https://ntfy.sh';
-function canSubmit(){ return !!(gformSpec() || SUGGEST.relayTopic || SUGGEST.endpoint); }
+function canSubmit(){ return !!(gformSpec() || SUGGEST.endpoint); }
 /* Reads the pre-filled link once: the form's submit address, and which entry.N box holds each placeholder. */
 let GFORM;
 function gformSpec(){
@@ -983,12 +970,6 @@ function thanksScreen(){
     '<div class="actions"><button class="btn primary block" data-act="sugback">' + (RET === 'q' ? 'Back to the question' : 'Back to menu') + '</button></div>';
   window.scrollTo(0, 0);
 }
-async function relayPublish(item){
-  const body = {topic: SUGGEST.relayTopic, title: titleOf(item), tags: ['speech_balloon'],
-    message: item.text + (item.ctx ? '\n\nQuestion: ' + item.ctx.q : '')};
-  const res = await fetch(RELAY, {method: 'POST', body: JSON.stringify(body)});
-  if(!res.ok) throw {code: 'relay', message: 'HTTP ' + res.status};
-}
 async function gformPublish(item){
   const g = gformSpec(), c = item.ctx || {};
   const vals = {cat: item.cat, text: item.text, name: item.name || 'Anonymous',
@@ -1020,7 +1001,6 @@ async function sendSuggestion(){
   setStatus('Sending…');
   const jobs = [];
   if(gformSpec()) jobs.push(gformPublish(item));
-  if(SUGGEST.relayTopic) jobs.push(relayPublish(item));
   if(SUGGEST.endpoint) jobs.push(postToEndpoint(item));
   let sent = false, why = '';
   if(jobs.length){
@@ -1067,9 +1047,9 @@ function gcSec(si){ const sc = SECS[si]; if(sc && sc.key !== 'Review') gcEvent(g
 function gcSet(z){ if(z && z.sec !== 'Review') gcEvent(gcSetPath(z), 'Started set: ' + z.lab); }
 function gcMissed(si){ const sc = SECS[si]; if(sc) gcEvent(gcMissPath(sc), 'Started missed questions: ' + sc.name.replace(/&amp;/g, '&')); }
 /* ---------- OWNER TOOLS ----------
-   The reviewer, suggestions inbox and site stats are in owner.js, which is only fetched when one of them is opened:
-   tap the "Formats" line at the bottom of the menu 5 times, or add #review, #inbox or #stats to the page address. */
-const HASH_PAGES = {'#review': 'rev', '#inbox': 'inb', '#stats': 'stats'};
+   The reviewer and site stats are in owner.js, which is only fetched when one of them is opened:
+   tap the "Formats" line at the bottom of the menu 5 times, or add #review or #stats to the page address. */
+const HASH_PAGES = {'#review': 'rev', '#stats': 'stats'};
 let OWNER_JS = null;
 function openOwner(page, push){
   if(!OWNER_JS){
@@ -1112,7 +1092,7 @@ function route(){
   else if(p === 'sec' && si >= 0){ SECI = si; renderMenu(); }
   else if(p === 'settings'){ SET_FROM = st.from === 'q' ? 'q' : 'menu'; renderSettings(); window.scrollTo(0, 0); }
   else if(p === 'sug') renderSuggest(CTX, st.ret === 'q' ? 'q' : 'menu');
-  else if(p === 'secret' || p === 'rev' || p === 'inb' || p === 'stats') openOwner(p);
+  else if(p === 'secret' || p === 'rev' || p === 'stats') openOwner(p);
   else { SECI = -1; renderMenu(); }
 }
 try{ history.scrollRestoration = 'manual'; }catch(e){}

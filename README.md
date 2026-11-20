@@ -28,7 +28,7 @@ There is nothing to install. Visit the [live site](https://luteron2026.github.io
 | --- | --- |
 | `index.html` | The page, styles and scripts |
 | `questions.js` | The sections on the front page, then every practice set and question, one per line |
-| `owner.js` | The owner's tools (question reviewer, suggestions inbox, site stats). Only fetched when one of them is opened |
+| `owner.js` | The owner's tools (question reviewer, site stats). Only fetched when one of them is opened |
 | `maps/` | The map images, loaded only when a map question is shown |
 | `preview.png` | The picture shown when the link is shared in a chat or on social media |
 | `version.json` | The current version number. Open pages check it and update themselves when it goes up |
@@ -90,6 +90,8 @@ Suggestions can be saved as Google Form responses. They are kept until you delet
 1. Create a Google Form with six **Short answer** or **Paragraph** questions: Type, Note, Name, Exam, Question #, Question text. Leave them all optional.
 2. In **Settings**: turn off "Collect email addresses" and "Limit to 1 response". On a school or work Google account, also turn off "Restrict to users in your organization".
 3. Open the **⋮** menu and choose **Get pre-filled link**. Type these exact placeholder answers: `TYPE`, `NOTE`, `NAME`, `EXAM`, `QNUM`, `QUESTION`. Click **Get link**, then **Copy link**.
-4. Paste that link into `googleForm` in the `SUGGEST` line of `index.html`. Optionally paste the form's edit link (the address of the editing page) into `googleResponses` so the hidden inbox links to the responses.
+4. Paste that link into `googleForm` in the `SUGGEST` line of `index.html`.
 5. For notifications: in the form, go to **Responses**, then **⋮**, then **Get email notifications for new responses**. Choose **Link to Sheets** too if you want a spreadsheet.
-6. Send a test suggestion from the page and check that it shows up under Responses. Once it does, you can set `relayTopic` to `''` to stop using the 12-hour relay.
+6. Send a test suggestion from the page and check that it shows up under Responses.
+
+To read suggestions, open the form in Google Forms and go to **Responses**.
