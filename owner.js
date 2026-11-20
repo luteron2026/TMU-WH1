@@ -1,9 +1,9 @@
-/* Owner tools: the reviewer, the suggestions inbox and the site stats.
+/* Owner tools: the reviewer and the site stats.
    Students never need this file, so index.html only fetches it when one of these screens is opened:
-   tap the "Formats" line at the bottom of the menu 5 times, or add #review, #inbox or #stats to the page address.
+   tap the "Formats" line at the bottom of the menu 5 times, or add #review or #stats to the page address.
    It runs after the main script and uses its helpers (app, esc, DATA, SECS, VIEW, hpush, hback, whyHtml and so on). */
 
-/* Back button for the inbox and stats: returns to Owner tools when opened from there, otherwise to the menu */
+/* Back button for the stats: returns to Owner tools when opened from there, otherwise to the menu */
 function ownerBackBtn(){ return FROM_SECRET ? '<button class="btn" data-act="ownerback">← Owner tools</button>' : '<button class="btn" data-act="menu">← Menu</button>'; }
 
 /* ---------- REVIEWER ---------- */
@@ -51,7 +51,6 @@ function renderSecret(){
   VIEW = 'secret'; FROM_SECRET = true;
   app.innerHTML = '<div class="top"><button class="btn" data-act="menu">← Menu</button><div class="ttl">Owner tools</div></div>' +
     '<button class="card" data-rv="open"><span class="num">🔍</span><span><div class="t">Reviewer</div><div class="s">Step through every question with the answer and guide line, flag or mark as checked</div></span></button>' +
-    '<button class="card" data-act="inbox"><span class="num">📥</span><span><div class="t">Suggestions inbox</div><div class="s">Only you can see this</div></span></button>' +
     '<button class="card" data-act="stats"><span class="num">📊</span><span><div class="t">Site stats</div><div class="s">Visitors, and which sections and sets people open</div></span></button>';
   window.scrollTo(0, 0);
 }
@@ -140,83 +139,6 @@ document.addEventListener('keydown', e => {
   if(tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return;
   if(e.key === 'ArrowRight') rvMove(1); else if(e.key === 'ArrowLeft') rvMove(-1);
 });
-
-const ARCH = 'wh1_sugg_v1';
-function loadArch(){ try{ const a = JSON.parse(localStorage.getItem(ARCH) || '{}'); return {items: a.items || {}, deleted: a.deleted || {}}; }catch(e){ return {items:{}, deleted:{}}; } }
-function saveArch(a){ try{ localStorage.setItem(ARCH, JSON.stringify(a)); }catch(e){} }
-function fmtDate(t){ try{ return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' ' + new Date(t).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
-async function relayFetch(){
-  const res = await fetch(RELAY + '/' + encodeURIComponent(SUGGEST.relayTopic) + '/json?poll=1&since=all');
-  if(!res.ok) throw {code: 'relay', message: 'HTTP ' + res.status};
-  const out = [];
-  (await res.text()).split('\n').forEach(l => {
-    l = l.trim(); if(!l) return;
-    try{ const e = JSON.parse(l); if(e.event === 'message') out.push({id: 'n_' + e.id, t: (e.time || 0) * 1000, title: e.title || 'Suggestion', text: e.message || '', done: false}); }catch(x){}
-  });
-  return out;
-}
-async function relayDiag(){
-  const out = [];
-  const show = () => { const el = document.getElementById('sg-diag'); if(el) el.textContent = out.join('\n'); };
-  out.push('Page address: ' + location.href); out.push('Topic: ' + SUGGEST.relayTopic); show();
-  try{
-    const r = await fetch(RELAY, {method: 'POST', body: JSON.stringify({topic: SUGGEST.relayTopic, title: 'Connection test', tags: ['white_check_mark'], message: 'Test from the exam page at ' + new Date().toLocaleString()})});
-    out.push('Send test: ' + (r.ok ? 'OK' : 'FAILED') + ' (HTTP ' + r.status + ')');
-  }catch(e){
-    out.push('Send test: BLOCKED (' + ((e && e.message) || e) + '). The browser could not reach ntfy.sh from this page. Usual causes: the host or a content blocker prevents outside requests.');
-  }
-  show();
-  try{
-    const items = await relayFetch();
-    out.push('Read test: OK, ' + items.length + ' message(s) currently on the relay');
-  }catch(e){
-    out.push('Read test: FAILED (' + ((e && e.message) || e) + ')');
-  }
-  show();
-}
-
-/* ---------- INBOX ---------- */
-let INBOX = [];
-async function renderInbox(){
-  VIEW = 'inb';
-  const head = '<div class="top">' + ownerBackBtn() + '<div class="ttl">Suggestions inbox</div></div>';
-  app.innerHTML = head + '<div class="note">Loading…</div>';
-  const notes = [];
-  const arch = loadArch();
-  if(SUGGEST.relayTopic){
-    try{
-      (await relayFetch()).forEach(it => { if(!arch.deleted[it.id] && !arch.items[it.id]) arch.items[it.id] = it; });
-      saveArch(arch);
-    }catch(e){ notes.push('Couldn’t reach the relay just now (' + ((e && e.message) || e) + '). Showing what’s already saved on this device. Tap “Test connection” for details.'); }
-  }
-  let items = Object.keys(arch.items).filter(id => !arch.deleted[id]).map(id => Object.assign({}, arch.items[id], {src: 'local'}));
-  items.sort((a, b) => b.t - a.t);
-  INBOX = items;
-  if(VIEW !== 'inb') return;
-  const open = items.filter(i => !i.done), done = items.filter(i => i.done);
-  const card = it => '<div class="inb' + (it.done ? ' done' : '') + '"><div class="meta"><span>' + esc(fmtDate(it.t)) + '</span><b>' + esc(titleOf(it)) + '</b></div>' +
-    '<div class="txt">' + esc(it.text) + '</div>' + (it.ctx ? '<div class="cq">' + esc(it.ctx.q) + '</div>' : '') +
-    '<div class="row"><button class="btn" data-act="sugdone" data-id="' + esc(it.id) + '">' + (it.done ? 'Reopen' : 'Mark done') + '</button>' +
-    '<button class="btn" data-act="sugdel" data-id="' + esc(it.id) + '">Delete</button></div></div>';
-  let h = head.replace('</div></div>', '</div><div class="cnt">' + open.length + ' open</div></div>') +
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="inbox">Refresh</button>' + (SUGGEST.relayTopic ? '<button class="btn" data-act="sugdiag">Test connection</button>' : '') + (open.length ? '<button class="btn" data-act="sugcopyall">Copy all open</button>' : '') + '</div>' +
-    '<div id="sg-status" class="status" role="status"></div>';
-  if(gformSpec()) h += '<p class="note" style="margin-top:0">Suggestions also go to your Google Form, where they are kept. ' +
-    (SUGGEST.googleResponses ? '<a href="' + esc(SUGGEST.googleResponses.replace(/\/edit.*$/, '/edit#responses')) + '" target="_blank" rel="noopener">Open the form responses</a>.' : 'Open the form in Google Forms and pick Responses to read them.') + '</p>';
-  if(SUGGEST.relayTopic) h += '<p class="note" style="margin-top:0">The relay keeps messages for about 12 hours. Each time you open this inbox, new ones are saved on this device.</p>';
-  notes.forEach(n => { h += '<p class="note" style="color:var(--bad)">' + esc(n) + '</p>'; });
-  h += '<pre id="sg-diag" style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:8px 0 0"></pre>';
-  if(!items.length) h += '<div class="menu-note">No suggestions yet.</div>';
-  h += open.map(card).join('');
-  if(done.length) h += '<h3 style="margin-top:20px;font-size:16px;color:var(--muted)">Done (' + done.length + ')</h3>' + done.map(card).join('');
-  app.innerHTML = h; window.scrollTo(0, 0);
-}
-function editInboxItem(b, kind){
-  const id = b.dataset.id, arch = loadArch();
-  if(kind === 'del'){ delete arch.items[id]; arch.deleted[id] = 1; }
-  else if(arch.items[id]){ arch.items[id].done = !arch.items[id].done; }
-  saveArch(arch);
-}
 
 /* Time ranges. GoatCounter's public counter only understands whole days (start=YYYY-MM-DD,
    midnight UTC), so "last 24 hours" needs GoatCounter's API, which needs an
@@ -512,22 +434,12 @@ app.addEventListener('click', e => {
   if(!b || b.disabled) return;
   const a = b.dataset.act;
   if(a === 'ownerback') hback(renderSecret);
-  else if(a === 'inbox'){ if(VIEW !== 'inb') hpush('inb'); renderInbox(); }
   else if(a === 'stats'){ if(VIEW !== 'stats') hpush('stats'); renderStats(); }
   else if(a === 'gcser'){ if(gcSetShow(b.dataset.k, b.checked)){ if(GC_CHART) gcDrawChart(GC_CHART.s); } else b.checked = true; }
   else if(a === 'gcview'){ gcSetView(b.dataset.v); renderStats(); }
   else if(a === 'gcrange'){ gcSetRange(b.dataset.r); renderStats(); }
   else if(a === 'gckeysave'){ const el = document.getElementById('gc-key'); const k = el ? el.value.trim() : ''; if(k){ gcSetKey(k); renderStats(); } else if(el) el.focus(); }
   else if(a === 'gckeydel'){ gcSetKey(''); renderStats(); }
-  else if(a === 'sugdiag') relayDiag();
-  else if(a === 'sugcopyall'){
-    copyText(INBOX.filter(i => !i.done).map(itemAsText).join('\n\n')).then(ok => setStatus(ok ? 'Copied all open suggestions.' : 'Couldn’t copy automatically.', ok ? 'good' : 'bad'));
-  }
-  else if(a === 'sugdone'){ editInboxItem(b, 'done'); renderInbox(); }
-  else if(a === 'sugdel'){
-    if(b.dataset.arm !== '1'){ b.dataset.arm = '1'; b.textContent = 'Tap again to delete'; return; }
-    editInboxItem(b, 'del'); renderInbox();
-  }
 });
 /* The screens index.html can open by name (see openOwner there). */
-const OWNER_PAGES = {secret: renderSecret, rev: renderReviewer, inb: renderInbox, stats: renderStats};
+const OWNER_PAGES = {secret: renderSecret, rev: renderReviewer, stats: renderStats};
