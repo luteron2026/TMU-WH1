@@ -251,7 +251,7 @@ select.field{min-height:48px}
 <div id="app"></div>
 <script>
 /* On every update, run: node tools/check.js --release   It raises APP_VERSION here and "version" in version.json together, and sets APP_UPDATED to today (see README). */
-const APP_VERSION = 49;
+const APP_VERSION = 50;
 const APP_UPDATED = '2026-11-20';
 /* The number shown on the menu, like "v37.19". The part after the dot is worked out from APP_VERSION,
    so it changes to a new number from 01 to 99 on every update and everyone sees the same one. */
@@ -273,7 +273,7 @@ document.write('<script src="questions.js?v=' + APP_VERSION + '"><\/script>');
    Set relayTopic to '' to turn the relay off.
    To open the hidden inbox: tap the small "Formats" line at the bottom of the menu 5 times, or add #inbox to the page address. */
 let UPDATE_READY = 0, LAST_CHECK = 0;
-const SUGGEST = { googleForm: 'https://docs.google.com/forms/d/e/1FAIpQLSdkY3vp4zvhSQ_kuBFZaCnG1SXHSziLfQVEJ6JmCKzCAC8PHg/viewform?usp=pp_url&entry.198036816=TYPE&entry.212889134=NOTE&entry.1304214896=NAME&entry.677728665=EXAM&entry.829690690=QNUM&entry.49107539=QUESTION', googleResponses: '', relayTopic: 'whx1-be9550a0735df7b80b89', endpoint: '', accessKey: '' };
+const SUGGEST = { googleForm: 'https://docs.google.com/forms/d/e/1FAIpQLSdkY3vp4zvhSQ_kuBFZaCnG1SXHSziLfQVEJ6JmCKzCAC8PHg/viewform?usp=pp_url&entry.198036816=TYPE&entry.212889134=NOTE&entry.1304214896=NAME&entry.677728665=EXAM&entry.829690690=QNUM&entry.49107539=QUESTION', googleResponses: '', relayTopic: '', endpoint: '', accessKey: '' };
 
 
 const app = document.getElementById('app');
